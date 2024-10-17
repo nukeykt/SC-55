@@ -1393,7 +1393,7 @@ int main(int argc, char *argv[])
     int pageNum = 32;
     bool autodetect = true;
     ResetType resetType = ResetType::NONE;
-    const char* pname = NULL;
+    char* pname = NULL;
 
     romset = ROM_SET_MK2;
 
