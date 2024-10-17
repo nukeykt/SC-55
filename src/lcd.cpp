@@ -51,11 +51,17 @@ static uint8_t LCD_Data[80];
 static uint8_t LCD_CG[64];
 
 static uint8_t lcd_enable = 1;
+static uint8_t lcd_button_enable = 0;
 static bool lcd_quit_requested = false;
 
 void LCD_Enable(uint32_t enable)
 {
     lcd_enable = enable;
+}
+
+void LCD_ButtonEnable(uint8_t state)
+{
+    lcd_button_enable = state;
 }
 
 bool LCD_QuitRequested()
@@ -539,8 +545,29 @@ void LCD_Update(void)
         SDL_UpdateTexture(texture, &rect, lcd_buffer, lcd_width_max * 4);
 
         if (romset == ROM_SET_MK2) {
-            SDL_RenderCopy(renderer, background, NULL, NULL);
             SDL_Rect srcrect, dstrect;
+            srcrect.x = 0;
+            srcrect.y = 0;
+            srcrect.w = 2240;
+            srcrect.h = 466;
+            SDL_RenderCopy(renderer, background, &srcrect, NULL);
+            if ((lcd_button_enable & 1) != 0 || (lcd_button_enable & 2) != 0) {
+                srcrect.x = 0;
+                srcrect.y = 466;
+                srcrect.w = 52;
+                srcrect.h = 52;
+                dstrect.x = 754;
+                dstrect.w = 26;
+                dstrect.h = 26;
+                if ((lcd_button_enable & 1) != 0) {
+                    dstrect.y = 35;
+                    SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
+                }
+                if ((lcd_button_enable & 2) != 0) {
+                    dstrect.y = 82;
+                    SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
+                }
+            }
             srcrect.x = 0;
             srcrect.y = 0;
             srcrect.w = 740;

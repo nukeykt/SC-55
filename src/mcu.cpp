@@ -1136,6 +1136,17 @@ uint8_t MCU_ReadP1(void)
 void MCU_WriteP0(uint8_t data)
 {
     mcu_p0_data = data;
+    // printf("P0: %d\n", data);
+    uint8_t state = 0;
+    if ((data & 0x40) == 0) {
+        state |= 1;
+        // printf("ALL on\n");
+    }
+    if ((data & 0x20) == 0) {
+        state |= 2;
+        // printf("MUTE on\n");
+    }
+    LCD_ButtonEnable(state);
 }
 
 void MCU_WriteP1(uint8_t data)
