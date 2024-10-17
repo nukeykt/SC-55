@@ -3,8 +3,9 @@ Roland SC-55 emulator, by nukeykt.
 
 Supported models:
 - SC-55mk2/SC-155mk2 (v1.01 firmware is confirmed to work)
-- SC-55mk1 (v1.21/v2.0 firmwares are confirmed to work)
+- SC-55mk1 (v1.0/v1.21/v2.0 firmwares are confirmed to work)
 - CM-300/SCC-1 (v1.10/v1.20 firmwares are confirmed to work)
+- SCC-1A
 - SC-55st (v1.01)
 - JV-880 (v1.0.0/v1.0.1)
 - SCB-55/RLP-3194
@@ -19,6 +20,9 @@ Special thanks:
 - mattw.
 - HardWareMan.
 - giulioz: JV-880 support
+- Cloudschatze.
+- NikitaLita.
+- Karmeck.
 
 ## License
 
@@ -64,6 +68,13 @@ R15199880 (M37450M2 mcu) -> rom_sm.bin
 R15209359 (WAVE 16M) -> waverom1.bin
 R15279813 (WAVE 8M) -> waverom2.bin
 
+SC-55 (v1.00):
+R15199748 (H8/532 mcu) -> sc55_rom1.bin
+R1544925800 (H8/532 extra code) -> sc55_rom2.bin
+R15209276 (WAVE A) -> sc55_waverom1.bin
+R15209277 (WAVE B) -> sc55_waverom2.bin
+R15209281 (WAVE C) -> sc55_waverom3.bin
+
 SC-55 (v1.21):
 R15199778 (H8/532 mcu) -> sc55_rom1.bin
 R15209363 (H8/532 extra code) -> sc55_rom2.bin
@@ -88,6 +99,13 @@ R15279808 (WAVE C) -> cm300_waverom3.bin
 CM-300/SCC-1 (v1.20):
 R15199774 (H8/532 mcu) -> cm300_rom1.bin
 R15279812 (H8/532 extra code) -> cm300_rom2.bin
+R15279806 (WAVE A) -> cm300_waverom1.bin
+R15279807 (WAVE B) -> cm300_waverom2.bin
+R15279808 (WAVE C) -> cm300_waverom3.bin
+
+SCC-1A:
+R00128523 (H8/532 mcu) -> cm300_rom1.bin
+R00128567 (H8/532 extra code) -> cm300_rom2.bin
 R15279806 (WAVE A) -> cm300_waverom1.bin
 R15279807 (WAVE B) -> cm300_waverom2.bin
 R15279808 (WAVE C) -> cm300_waverom3.bin
