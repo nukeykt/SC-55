@@ -257,6 +257,7 @@ macro(copy_rom_target TargetName TargetFile)
 endmacro()
 
 copy_rom_target(back_data back.data)
+copy_rom_target(sc55mkII_background.bmp sc55mkII_background.bmp)
 
 install(TARGETS nuked-sc55
         EXPORT NukedSC55StaticTargets

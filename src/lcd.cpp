@@ -169,6 +169,7 @@ static const int lcd_height_max = 1024;
 static SDL_Window *window;
 static SDL_Renderer *renderer;
 static SDL_Texture *texture;
+static SDL_Texture *background;
 
 static std::string m_back_path = "back.data";
 
@@ -239,13 +240,24 @@ void LCD_Init(void)
 
     title += rs_name[romset];
 
-    window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, lcd_width, lcd_height, SDL_WINDOW_SHOWN);
+    int screen_width, screen_height;
+    if (romset == ROM_SET_MK2) {
+        screen_width = 1120;
+        screen_height = 233;
+    } else {
+        screen_width = lcd_width;
+        screen_height = lcd_height;
+    }
+
+    window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_SHOWN);
     if (!window)
         return;
 
     renderer = SDL_CreateRenderer(window, -1, 0);
     if (!renderer)
         return;
+
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "BEST");
 
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, lcd_width, lcd_height);
 
@@ -258,6 +270,11 @@ void LCD_Init(void)
 
     fread(lcd_background, 1, sizeof(lcd_background), raw);
     fclose(raw);
+
+    if (romset == ROM_SET_MK2) {
+        SDL_Surface* bg = SDL_LoadBMP("sc55mkII_background.bmp");
+        background = SDL_CreateTextureFromSurface(renderer, bg);
+    }
 
     lcd_init = 1;
 }
@@ -514,8 +531,28 @@ void LCD_Update(void)
 
         MCU_WorkThread_Unlock();
 
-        SDL_UpdateTexture(texture, NULL, lcd_buffer, lcd_width_max * 4);
-        SDL_RenderCopy(renderer, texture, NULL, NULL);
+        SDL_Rect rect;
+        rect.x = 0;
+        rect.y = 0;
+        rect.w = lcd_width;
+        rect.h = lcd_height;
+        SDL_UpdateTexture(texture, &rect, lcd_buffer, lcd_width_max * 4);
+
+        if (romset == ROM_SET_MK2) {
+            SDL_RenderCopy(renderer, background, NULL, NULL);
+            SDL_Rect srcrect, dstrect;
+            srcrect.x = 0;
+            srcrect.y = 0;
+            srcrect.w = 740;
+            srcrect.h = 268;
+            dstrect.x = 283;
+            dstrect.y = 49;
+            dstrect.w = 370;
+            dstrect.h = 134;
+            SDL_RenderCopy(renderer, texture, &srcrect, &dstrect);
+        } else {
+            SDL_RenderCopy(renderer, texture, NULL, NULL);
+        }
         SDL_RenderPresent(renderer);
     }
 
