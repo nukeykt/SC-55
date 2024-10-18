@@ -54,7 +54,7 @@ static uint8_t LCD_CG[64];
 static uint8_t lcd_enable = 1;
 static uint8_t lcd_button_enable = 0;
 static bool lcd_quit_requested = false;
-static float volume = 0.75f;
+static float volume = 0.775f;
 
 void LCD_Enable(uint32_t enable)
 {
@@ -185,6 +185,8 @@ static uint32_t lcd_buffer[lcd_height_max][lcd_width_max];
 static uint32_t lcd_background[268][741];
 
 static uint32_t lcd_init = 0;
+
+static uint32_t drag_volume_knob = 0;
 
 const int button_map_sc55[][2] =
 {
@@ -592,9 +594,9 @@ void LCD_Update(void)
                 dstrect.h = 59;
                 SDL_RenderCopyEx(renderer, background, &srcrect, &dstrect, (volume - 0.5f) * 300.0, NULL, SDL_FLIP_NONE);
                 if (volume != 0.0f) {
-                    MCU_SetVolume(powf(10.0f, (-80.0f * (1.0f - volume)) / 20.0f));
+                    MCU_SetVolume((uint16_t) (powf(10.0f, (-80.0f * (1.0f - volume)) / 20.0f) * UINT16_MAX));
                 } else {
-                    MCU_SetVolume(0.0f);
+                    MCU_SetVolume(0);
                 }
             }
             srcrect.x = 0;
@@ -621,6 +623,35 @@ void LCD_Update(void)
                 MCU_EncoderTrigger(0);
             if (sdl_event.key.keysym.scancode == SDL_SCANCODE_PERIOD)
                 MCU_EncoderTrigger(1);
+        }
+
+        if (romset == ROM_SET_MK2) {
+            switch (sdl_event.type)
+            {
+            case SDL_MOUSEBUTTONUP:
+            case SDL_MOUSEBUTTONDOWN:
+                if (sdl_event.button.button == 1) {
+                    if (drag_volume_knob || (sdl_event.button.x >= 153 && sdl_event.button.x <= 212 && sdl_event.button.y >= 42 && sdl_event.button.y <= 101)) {
+                        drag_volume_knob = (sdl_event.type == SDL_MOUSEBUTTONDOWN) || (drag_volume_knob && sdl_event.type != SDL_MOUSEBUTTONUP);
+                    }
+                }
+                break;
+            case SDL_MOUSEMOTION:
+                if (drag_volume_knob) {
+                    int32_t relval = abs(sdl_event.motion.xrel) > abs(sdl_event.motion.yrel) ? sdl_event.motion.xrel : (volume > 0.5f ? sdl_event.motion.yrel : -sdl_event.motion.yrel);
+                    volume += relval / (volume > 0.775f ? 10000.0f : 400.0f); // Prevent someone make sound too loud (like me)
+                    if (volume > 1.0f) {
+                        volume = 1.0f;
+                    }
+                    if (volume < 0.0f) {
+                        volume = 0.0f;
+                    }
+                }
+                break;
+
+            default:
+                break;
+            }
         }
 
         switch (sdl_event.type)

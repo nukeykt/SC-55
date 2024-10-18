@@ -1298,10 +1298,12 @@ void MCU_CloseAudio(void)
 
 void MCU_PostSample(int *sample)
 {
-    sample[0] >>= 13;
-    sample[1] >>= 13;
-    sample[0] = (sample[0] * volume) >> 15;
-    sample[1] = (sample[1] * volume) >> 15;
+    sample[0] >>= 12;
+    sample[1] >>= 12;
+    uint16_t volumeH = (volume >> 4) & 0xFFF;
+    uint16_t volumeL = volume & 0xF;
+    sample[0] = ((sample[0] * volumeH) >> 12) + ((sample[0] * volumeL) >> 16);
+    sample[1] = ((sample[1] * volumeH) >> 12) + ((sample[1] * volumeL) >> 16);
     if (sample[0] > INT16_MAX)
         sample[0] = INT16_MAX;
     else if (sample[0] < INT16_MIN)
@@ -1315,12 +1317,8 @@ void MCU_PostSample(int *sample)
     sample_write_ptr = (sample_write_ptr + 2) % audio_buffer_size;
 }
 
-void MCU_SetVolume(float vol) {
-    if (vol > 1.0f)
-        vol = 1.0f;
-    if (vol < 0.0f)
-        vol = 0.0f;
-    volume = (uint16_t) (INT16_MAX * vol);
+void MCU_SetVolume(uint16_t vol) {
+    volume = vol;
 }
 
 void MCU_GA_SetGAInt(int line, int value)

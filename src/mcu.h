@@ -473,4 +473,4 @@ void MCU_PostUART(uint8_t data);
 
 void MCU_WorkThread_Lock(void);
 void MCU_WorkThread_Unlock(void);
-void MCU_SetVolume(float);
+void MCU_SetVolume(uint16_t);
