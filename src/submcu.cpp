@@ -184,6 +184,9 @@ void SM_Write(uint16_t address, uint8_t data)
         address &= 0x1f;
         switch (address)
         {
+            case SM_DEV_UART2_DATA: // MIDI Out
+                // printf("tx:%x\n", data);
+                break;
             case SM_DEV_P1_DATA:
                 MCU_WriteP1(data);
                 break;

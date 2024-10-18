@@ -360,6 +360,7 @@ void MCU_DeviceWrite(uint32_t address, uint8_t data)
     case DEV_IPRD:
         break;
     case DEV_PWM1_DTR:
+        LCD_SetContrast(16 - (data >> 4));
         break;
     case DEV_PWM1_TCR:
         break;

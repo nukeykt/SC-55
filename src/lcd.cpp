@@ -55,6 +55,7 @@ static uint8_t lcd_enable = 1;
 static uint8_t lcd_button_enable = 0;
 static bool lcd_quit_requested = false;
 static float volume = 0.775f;
+static uint8_t contrast = 8;
 
 void LCD_Enable(uint32_t enable)
 {
@@ -64,6 +65,10 @@ void LCD_Enable(uint32_t enable)
 void LCD_ButtonEnable(uint8_t state)
 {
     lcd_button_enable = state;
+}
+
+void LCD_SetContrast(uint8_t value) {
+    contrast = value;
 }
 
 bool LCD_QuitRequested()
@@ -188,6 +193,8 @@ static uint32_t lcd_init = 0;
 
 static uint32_t drag_volume_knob = 0;
 
+static uint32_t background_enabled = 0;
+
 const int button_map_sc55[][2] =
 {
     SDL_SCANCODE_Q, MCU_BUTTON_POWER,
@@ -250,8 +257,17 @@ void LCD_Init(void)
 
     title += rs_name[romset];
 
-    int screen_width, screen_height;
+    SDL_Surface* bg = nullptr;
+
     if (romset == ROM_SET_MK2) {
+        bg = SDL_LoadBMP("sc55mkII_background.bmp");
+        if (bg) {
+            background_enabled = 1;
+        }
+    }
+
+    int screen_width, screen_height;
+    if (romset == ROM_SET_MK2 && background_enabled) {
         screen_width = 1120;
         screen_height = 233;
     } else {
@@ -274,17 +290,18 @@ void LCD_Init(void)
     if (!texture)
         return;
 
+    if (background_enabled) {
+        background = SDL_CreateTextureFromSurface(renderer, bg);
+        if (!background)
+            return;
+    }
+
     raw = Files::utf8_fopen(m_back_path.c_str(), "rb");
     if (!raw)
         return;
 
     fread(lcd_background, 1, sizeof(lcd_background), raw);
     fclose(raw);
-
-    if (romset == ROM_SET_MK2) {
-        SDL_Surface* bg = SDL_LoadBMP("sc55mkII_background.bmp");
-        background = SDL_CreateTextureFromSurface(renderer, bg);
-    }
 
     lcd_init = 1;
 }
@@ -443,6 +460,11 @@ void LCD_Update(void)
     {
         MCU_WorkThread_Lock();
 
+        // FIXME
+        lcd_col1 = ((lcd_background[0][0] & 0xE0E0E0) * (32 - (contrast << 1))) >> 5;
+        lcd_col2 = ((lcd_background[0][0] & 0xE0E0E0) * (32 - (contrast >> 1))) >> 5;
+        // printf("bg: %06x, lcd1: %06x, lcd2: %06x\n", lcd_background[0][0], lcd_col1, lcd_col2);
+
         if (!lcd_enable && !mcu_jv880)
         {
             memset(lcd_buffer, 0, sizeof(lcd_buffer));
@@ -548,7 +570,7 @@ void LCD_Update(void)
         rect.h = lcd_height;
         SDL_UpdateTexture(texture, &rect, lcd_buffer, lcd_width_max * 4);
 
-        if (romset == ROM_SET_MK2) {
+        if (romset == ROM_SET_MK2 && background_enabled) {
             SDL_Rect srcrect, dstrect;
             srcrect.x = 0;
             srcrect.y = 0;
@@ -625,7 +647,7 @@ void LCD_Update(void)
                 MCU_EncoderTrigger(1);
         }
 
-        if (romset == ROM_SET_MK2) {
+        if (romset == ROM_SET_MK2 && background_enabled) {
             switch (sdl_event.type)
             {
             case SDL_MOUSEBUTTONUP:
