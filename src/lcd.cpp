@@ -35,6 +35,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "SDL.h"
 #include "SDL_mutex.h"
 #include "lcd.h"
@@ -53,6 +54,7 @@ static uint8_t LCD_CG[64];
 static uint8_t lcd_enable = 1;
 static uint8_t lcd_button_enable = 0;
 static bool lcd_quit_requested = false;
+static float volume = 0.75f;
 
 void LCD_Enable(uint32_t enable)
 {
@@ -559,13 +561,40 @@ void LCD_Update(void)
                 dstrect.x = 754;
                 dstrect.w = 26;
                 dstrect.h = 26;
-                if ((lcd_button_enable & 1) != 0) {
+                if ((lcd_button_enable & 1) != 0) { // ALL
                     dstrect.y = 35;
                     SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
                 }
-                if ((lcd_button_enable & 2) != 0) {
+                if ((lcd_button_enable & 2) != 0) { // MUTE
                     dstrect.y = 82;
                     SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
+                }
+            }
+            if ((lcd_button_enable & 4) != 0) { // STANDBY
+                srcrect.x = 0;
+                srcrect.y = 518;
+                srcrect.w = 20;
+                srcrect.h = 20;
+                dstrect.x = 118;
+                dstrect.y = 42;
+                dstrect.w = 10;
+                dstrect.h = 10;
+                SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
+            }
+            { // Volume
+                srcrect.x = 52;
+                srcrect.y = 466;
+                srcrect.w = 118;
+                srcrect.h = 118;
+                dstrect.x = 153;
+                dstrect.y = 42;
+                dstrect.w = 59;
+                dstrect.h = 59;
+                SDL_RenderCopyEx(renderer, background, &srcrect, &dstrect, (volume - 0.5f) * 300.0, NULL, SDL_FLIP_NONE);
+                if (volume != 0.0f) {
+                    MCU_SetVolume(powf(10.0f, (-80.0f * (1.0f - volume)) / 20.0f));
+                } else {
+                    MCU_SetVolume(0.0f);
                 }
             }
             srcrect.x = 0;

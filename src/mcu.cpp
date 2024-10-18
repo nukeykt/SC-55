@@ -149,6 +149,8 @@ static short *sample_buffer;
 static int sample_read_ptr;
 static int sample_write_ptr;
 
+static uint16_t volume;
+
 static SDL_AudioDeviceID sdl_audio;
 
 void MCU_ErrorTrap(void)
@@ -1146,6 +1148,10 @@ void MCU_WriteP0(uint8_t data)
         state |= 2;
         // printf("MUTE on\n");
     }
+    if ((data & 0x10) == 0) {
+        state |= 4;
+        // printf("STANDBY on\n");
+    }
     LCD_ButtonEnable(state);
 }
 
@@ -1292,12 +1298,14 @@ void MCU_CloseAudio(void)
 
 void MCU_PostSample(int *sample)
 {
-    sample[0] >>= 15;
+    sample[0] >>= 13;
+    sample[1] >>= 13;
+    sample[0] = (sample[0] * volume) >> 15;
+    sample[1] = (sample[1] * volume) >> 15;
     if (sample[0] > INT16_MAX)
         sample[0] = INT16_MAX;
     else if (sample[0] < INT16_MIN)
         sample[0] = INT16_MIN;
-    sample[1] >>= 15;
     if (sample[1] > INT16_MAX)
         sample[1] = INT16_MAX;
     else if (sample[1] < INT16_MIN)
@@ -1305,6 +1313,14 @@ void MCU_PostSample(int *sample)
     sample_buffer[sample_write_ptr + 0] = sample[0];
     sample_buffer[sample_write_ptr + 1] = sample[1];
     sample_write_ptr = (sample_write_ptr + 2) % audio_buffer_size;
+}
+
+void MCU_SetVolume(float vol) {
+    if (vol > 1.0f)
+        vol = 1.0f;
+    if (vol < 0.0f)
+        vol = 0.0f;
+    volume = (uint16_t) (INT16_MAX * vol);
 }
 
 void MCU_GA_SetGAInt(int line, int value)
