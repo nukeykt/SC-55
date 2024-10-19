@@ -51,10 +51,10 @@ static uint32_t LCD_RAM_MODE = 0;
 static uint8_t LCD_Data[80];
 static uint8_t LCD_CG[64];
 
-static uint8_t lcd_enable = 1;
+static uint8_t lcd_enable = 0;
 static uint8_t lcd_button_enable = 0;
 static bool lcd_quit_requested = false;
-static float volume = 0.775f;
+static float volume = 0.775f; // default volume (-18dB)
 static uint8_t contrast = 8;
 
 void LCD_Enable(uint32_t enable)
@@ -460,12 +460,7 @@ void LCD_Update(void)
     {
         MCU_WorkThread_Lock();
 
-        // FIXME
-        lcd_col1 = ((lcd_background[0][0] & 0xE0E0E0) * (32 - (contrast << 1))) >> 5;
-        lcd_col2 = ((lcd_background[0][0] & 0xE0E0E0) * (32 - (contrast >> 1))) >> 5;
-        // printf("bg: %06x, lcd1: %06x, lcd2: %06x\n", lcd_background[0][0], lcd_col1, lcd_col2);
-
-        if (!lcd_enable && !mcu_jv880)
+        if (!lcd_enable && !mcu_jv880 && false)
         {
             memset(lcd_buffer, 0, sizeof(lcd_buffer));
         }
@@ -481,12 +476,26 @@ void LCD_Update(void)
             }
             else
             {
-                for (size_t i = 0; i < lcd_height; i++) {
-                    for (size_t j = 0; j < lcd_width; j++) {
-                        lcd_buffer[i][j] = lcd_background[i][j];
+                if (lcd_enable) {
+                    for (size_t i = 0; i < lcd_height; i++) {
+                        for (size_t j = 0; j < lcd_width; j++) {
+                            lcd_buffer[i][j] = lcd_background[i][j];
+                        }
+                    }
+                } else {
+                    memset(LCD_Data, ' ', sizeof(LCD_Data));
+                    for (size_t i = 0; i < lcd_height; i++) {
+                        for (size_t j = 0; j < lcd_width; j++) {
+                            lcd_buffer[i][j] = (lcd_background[i][j] & 0xF0F000) >> 2;
+                        }
                     }
                 }
             }
+
+            // FIXME
+            lcd_col2 = ((lcd_buffer[0][0] & 0xE0E0E0) * (32 - (contrast >> 1))) >> 5;
+            lcd_col1 = ((lcd_col2 & 0xF0F0F0) * (16 - (((contrast + 1) >> 1) + 8))) >> 4;
+            // printf("bg: %06x, on: %06x, off: %06x contrast: %d\n", lcd_buffer[0][0] & 0xFFFFFF, lcd_col1, lcd_col2, contrast);
 
             if (mcu_jv880)
             {
@@ -606,8 +615,8 @@ void LCD_Update(void)
                 SDL_RenderCopy(renderer, background, &srcrect, &dstrect);
             }
             { // Volume
-                srcrect.x = 52;
-                srcrect.y = 466;
+                srcrect.x = 54;
+                srcrect.y = 468;
                 srcrect.w = 118;
                 srcrect.h = 118;
                 dstrect.x = 153;
@@ -615,11 +624,6 @@ void LCD_Update(void)
                 dstrect.w = 59;
                 dstrect.h = 59;
                 SDL_RenderCopyEx(renderer, background, &srcrect, &dstrect, (volume - 0.5f) * 300.0, NULL, SDL_FLIP_NONE);
-                if (volume != 0.0f) {
-                    MCU_SetVolume((uint16_t) (powf(10.0f, (-80.0f * (1.0f - volume)) / 20.0f) * UINT16_MAX));
-                } else {
-                    MCU_SetVolume(0);
-                }
             }
             srcrect.x = 0;
             srcrect.y = 0;
@@ -661,12 +665,24 @@ void LCD_Update(void)
             case SDL_MOUSEMOTION:
                 if (drag_volume_knob) {
                     int32_t relval = abs(sdl_event.motion.xrel) > abs(sdl_event.motion.yrel) ? sdl_event.motion.xrel : (volume > 0.5f ? sdl_event.motion.yrel : -sdl_event.motion.yrel);
+                    if (relval > 50) { // Maximum ±10dB incremental
+                        relval = 50;
+                    }
+                    if (relval < -50) {
+                        relval = -50;
+                    }
                     volume += relval / (volume > 0.775f ? 10000.0f : 400.0f); // Prevent someone make sound too loud (like me)
                     if (volume > 1.0f) {
                         volume = 1.0f;
                     }
                     if (volume < 0.0f) {
                         volume = 0.0f;
+                    }
+                    if (volume != 0.0f) {
+                        float vol = powf(10.0f, (-80.0f * (1.0f - volume)) / 20.0f); // or volume ^ 8 (0 < volume < 1)
+                        MCU_SetVolume((uint16_t) (vol * UINT16_MAX));
+                    } else {
+                        MCU_SetVolume(0);
                     }
                 }
                 break;

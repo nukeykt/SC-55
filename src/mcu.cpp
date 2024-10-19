@@ -149,7 +149,7 @@ static short *sample_buffer;
 static int sample_read_ptr;
 static int sample_write_ptr;
 
-static uint16_t volume;
+static uint16_t volume = 8250; // default volume (-18dB)
 
 static SDL_AudioDeviceID sdl_audio;
 
