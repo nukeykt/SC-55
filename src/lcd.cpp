@@ -451,6 +451,18 @@ void LCD_FontRenderLR(uint8_t ch)
     }
 }
 
+static uint32_t inline LCD_MixColor(uint32_t color, uint8_t contrast) {
+    uint8_t b = (color >> 16) & 0xFF;
+    uint8_t g = (color >> 8) & 0xFF;
+    uint8_t r = color & 0xFF;
+
+    b = (b * contrast) >> 8;
+    g = (g * contrast) >> 8;
+    r = (r * contrast) >> 8;
+
+    return (color & 0xFF000000) | ((b & 0xFF) << 16) | ((g & 0xFF) << 8) | (r & 0xFF);
+} 
+
 void LCD_Update(void)
 {
     if (!lcd_init)
@@ -492,10 +504,16 @@ void LCD_Update(void)
                 }
             }
 
-            // FIXME
-            lcd_col2 = ((lcd_buffer[0][0] & 0xE0E0E0) * (32 - (contrast >> 1))) >> 5;
-            lcd_col1 = ((lcd_col2 & 0xF0F0F0) * (16 - (((contrast + 1) >> 1) + 8))) >> 4;
-            // printf("bg: %06x, on: %06x, off: %06x contrast: %d\n", lcd_buffer[0][0] & 0xFFFFFF, lcd_col1, lcd_col2, contrast);
+            uint32_t con = 0x11 * (contrast - 1);
+            con = (con * con) >> 8;
+            lcd_col2 = LCD_MixColor(lcd_buffer[0][0], 0xFF - (con / 4 + 4));
+            lcd_col1 = LCD_MixColor(lcd_col2, 0x11 * (16 - (((contrast + 1) >> 1) + 4)));
+            // lcd_col2 = ((lcd_buffer[0][0] & 0xE0E0E0) * (32 - (contrast >> 1))) >> 5;
+            // lcd_col1 = ((lcd_col2 & 0xF0F0F0) * (16 - (((contrast + 1) >> 1) + 4))) >> 4;
+            // int con = (contrast * contrast) >> 4;
+            // lcd_col2 = ((lcd_buffer[0][0] & 0xE0E0E0) * (32 - (con >> 2))) >> 5;
+            // lcd_col1 = ((lcd_col2 & 0xF0F0F0) * (16 - (((contrast + 1) >> 1) + 4))) >> 4;
+            // printf("bg: %06x, on: %06x, off: %06x contrast: %d pow(contrast, 2): %d\n", lcd_buffer[0][0] & 0xFFFFFF, lcd_col1  & 0xFFFFFF, lcd_col2  & 0xFFFFFF, contrast, con);
 
             if (mcu_jv880)
             {
