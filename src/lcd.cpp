@@ -55,7 +55,7 @@ static uint8_t lcd_enable = 0;
 static uint8_t lcd_button_enable = 0;
 static bool lcd_quit_requested = false;
 static float volume = 0.775f; // default volume (-18dB)
-static uint8_t contrast = 8;
+static uint8_t lcd_contrast = 8;
 
 void LCD_Enable(uint32_t enable)
 {
@@ -67,8 +67,12 @@ void LCD_ButtonEnable(uint8_t state)
     lcd_button_enable = state;
 }
 
-void LCD_SetContrast(uint8_t value) {
-    contrast = value;
+void LCD_SetContrast(uint8_t contrast) {
+    if (contrast > 16)
+        contrast = 16;
+    if (contrast < 1)
+        contrast = 1;
+    lcd_contrast = contrast;
 }
 
 bool LCD_QuitRequested()
@@ -236,6 +240,41 @@ const int button_map_jv880[][2] =
     SDL_SCANCODE_D, MCU_BUTTON_MONITOR,
     SDL_SCANCODE_F, MCU_BUTTON_COMPARE,
     SDL_SCANCODE_G, MCU_BUTTON_ENTER,
+};
+
+const SDL_Rect button_regions_sc55[32] = {
+    {38, 36, 67, 19}, // Power
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {968, 38, 53, 18}, // Instrument
+    {1024, 38, 53, 18},
+    {754, 82, 26, 26}, // Mute
+    {754, 35, 26, 26}, // All
+    {0, 0, 0, 0},
+    {968, 178, 53, 18}, // MIDI ch
+    {1024, 178, 53, 18},
+    {968, 132, 53, 18}, // Chorus
+    {1024, 132, 53, 18},
+    {968, 85, 53, 18}, // Pan
+    {1024, 85, 53, 18},
+    {903, 37, 53, 18}, // Part R
+    {0, 0, 0, 0},
+    {831, 178, 53, 18}, // Key shift
+    {887, 178, 53, 18},
+    {831, 132, 53, 18}, // Reverb
+    {887, 132, 53, 18},
+    {831, 85, 53, 18}, // Level
+    {887, 85, 53, 18},
+    {849, 37, 53, 18}, // Part L
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0}
 };
 
 
@@ -472,9 +511,12 @@ void LCD_Update(void)
     {
         MCU_WorkThread_Lock();
 
+        uint8_t contrast = lcd_contrast;
+
         if (!lcd_enable && !mcu_jv880 && false)
         {
             memset(lcd_buffer, 0, sizeof(lcd_buffer));
+            contrast = 1;
         }
         else
         {
@@ -495,6 +537,7 @@ void LCD_Update(void)
                         }
                     }
                 } else {
+                    contrast = 1;
                     memset(LCD_Data, ' ', sizeof(LCD_Data));
                     for (size_t i = 0; i < lcd_height; i++) {
                         for (size_t j = 0; j < lcd_width; j++) {
@@ -673,13 +716,30 @@ void LCD_Update(void)
             switch (sdl_event.type)
             {
             case SDL_MOUSEBUTTONUP:
-            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONDOWN: {
                 if (sdl_event.button.button == 1) {
                     if (drag_volume_knob || (sdl_event.button.x >= 153 && sdl_event.button.x <= 212 && sdl_event.button.y >= 42 && sdl_event.button.y <= 101)) {
                         drag_volume_knob = (sdl_event.type == SDL_MOUSEBUTTONDOWN) || (drag_volume_knob && sdl_event.type != SDL_MOUSEBUTTONUP);
                     }
                 }
+                int32_t x = sdl_event.button.x;
+                int32_t y = sdl_event.button.y;
+                int mask = 0;
+                uint32_t button_pressed = (uint32_t)SDL_AtomicGet(&mcu_button_pressed);
+                for (int i = 0; i < 32; i++) {
+                    const SDL_Rect *rect = &button_regions_sc55[i];
+                    if (rect->x == 0 && rect->y == 0 && rect->w == 0 && rect->h == 0) continue;
+                    if (x >= rect->x && x <= rect->x + rect->w && y >= rect->y && y <= rect->y + rect->h) {
+                        mask |= 1 << i;
+                    }
+                }
+                if (sdl_event.type == SDL_MOUSEBUTTONDOWN)
+                    button_pressed |= mask;
+                else
+                    button_pressed &= ~mask;
+                SDL_AtomicSet(&mcu_button_pressed, (int)button_pressed);
                 break;
+            }
             case SDL_MOUSEMOTION:
                 if (drag_volume_knob) {
                     int32_t relval = abs(sdl_event.motion.xrel) > abs(sdl_event.motion.yrel) ? sdl_event.motion.xrel : (volume > 0.5f ? sdl_event.motion.yrel : -sdl_event.motion.yrel);
@@ -690,6 +750,30 @@ void LCD_Update(void)
                         relval = -50;
                     }
                     volume += relval / (volume > 0.775f ? 10000.0f : 400.0f); // Prevent someone make sound too loud (like me)
+                    if (volume > 1.0f) {
+                        volume = 1.0f;
+                    }
+                    if (volume < 0.0f) {
+                        volume = 0.0f;
+                    }
+                    if (volume != 0.0f) {
+                        float vol = powf(10.0f, (-80.0f * (1.0f - volume)) / 20.0f); // or volume ^ 8 (0 < volume < 1)
+                        MCU_SetVolume((uint16_t) (vol * UINT16_MAX));
+                    } else {
+                        MCU_SetVolume(0);
+                    }
+                }
+                break;
+            case SDL_MOUSEWHEEL:
+                if (sdl_event.wheel.mouseX >= 153 && sdl_event.wheel.mouseX <= 212 && sdl_event.wheel.mouseY >= 42 && sdl_event.wheel.mouseY <= 101) {
+                    int32_t relval = sdl_event.wheel.y;
+                    if (relval > 10) { // Maximum ±2dB incremental
+                        relval = 10;
+                    }
+                    if (relval < -10) {
+                        relval = -10;
+                    }
+                    volume += relval / 400.0f;
                     if (volume > 1.0f) {
                         volume = 1.0f;
                     }
