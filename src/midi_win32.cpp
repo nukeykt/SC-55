@@ -38,7 +38,8 @@
 #include "mcu.h"
 #include "midi.h"
 
-static HMIDIIN midi_handle;
+static HMIDIIN midi_in_handle;
+static HMIDIOUT midi_out_handle;
 static MIDIHDR midi_buffer;
 
 static char midi_in_buffer[1024];
@@ -80,7 +81,7 @@ void CALLBACK MIDI_Callback(
         case MIM_LONGDATA:
         case MIM_LONGERROR:
         {
-            midiInUnprepareHeader(midi_handle, &midi_buffer, sizeof(MIDIHDR));
+            midiInUnprepareHeader(midi_in_handle, &midi_buffer, sizeof(MIDIHDR));
 
             if (wMsg == MIM_LONGDATA)
             {
@@ -90,8 +91,8 @@ void CALLBACK MIDI_Callback(
                 }
             }
 
-            midiInPrepareHeader(midi_handle, &midi_buffer, sizeof(MIDIHDR));
-            midiInAddBuffer(midi_handle, &midi_buffer, sizeof(MIDIHDR));
+            midiInPrepareHeader(midi_in_handle, &midi_buffer, sizeof(MIDIHDR));
+            midiInAddBuffer(midi_in_handle, &midi_buffer, sizeof(MIDIHDR));
 
             break;
         }
@@ -101,53 +102,105 @@ void CALLBACK MIDI_Callback(
     }
 }
 
-int MIDI_Init(int port)
+int MIDI_Init(int inport, int outport)
 {
-    int num = midiInGetNumDevs();
+    if (inport >= 0) {
+        int num = midiInGetNumDevs();
 
-    if (num == 0)
-    {
-        printf("No midi input\n");
-        return 0;
+        if (num == 0)
+        {
+            printf("No midi input\n");
+            return 0;
+        }
+
+        if (inport < 0 || inport >= num)
+        {
+            printf("Out of range midi input port is requested. Defaulting to port 0\n");
+            inport = 0;
+        }
+
+        MIDIINCAPSA caps;
+
+        midiInGetDevCapsA(inport, &caps, sizeof(MIDIINCAPSA));
+
+        auto res = midiInOpen(&midi_in_handle, inport, (DWORD_PTR)MIDI_Callback, 0, CALLBACK_FUNCTION);
+
+        if (res != MMSYSERR_NOERROR)
+        {
+            printf("Can't open midi input\n");
+            return 0;
+        }
+
+        printf("Opened midi input port: %s\n", caps.szPname);
+
+        midi_buffer.lpData = midi_in_buffer;
+        midi_buffer.dwBufferLength = sizeof(midi_in_buffer);
+
+        auto r1 = midiInPrepareHeader(midi_in_handle, &midi_buffer, sizeof(MIDIHDR));
+        auto r2 = midiInAddBuffer(midi_in_handle, &midi_buffer, sizeof(MIDIHDR));
+        auto r3 = midiInStart(midi_in_handle);
     }
 
-    if (port < 0 || port >= num)
-    {
-        printf("Out of range midi port is requested. Defaulting to port 0\n");
-        port = 0;
+    if (outport >= 0) {
+        int num = midiOutGetNumDevs();
+
+        if (num == 0)
+        {
+            printf("No midi input\n");
+            return 0;
+        }
+
+        if (outport < 0 || outport >= num)
+        {
+            printf("Out of range midi output port is requested. Defaulting to port 0\n");
+            outport = 0;
+        }
+
+        MIDIOUTCAPSA caps;
+
+        midiOutGetDevCapsA(outport, &caps, sizeof caps);
+
+        auto res = midiOutOpen(&midi_out_handle, outport, (DWORD_PTR) NULL, 0, CALLBACK_NULL);
+
+        printf("Opened midi output port: %s\n", caps.szPname);
     }
-
-    MIDIINCAPSA caps;
-
-    midiInGetDevCapsA(port, &caps, sizeof(MIDIINCAPSA));
-
-    auto res = midiInOpen(&midi_handle, port, (DWORD_PTR)MIDI_Callback, 0, CALLBACK_FUNCTION);
-
-    if (res != MMSYSERR_NOERROR)
-    {
-        printf("Can't open midi input\n");
-        return 0;
-    }
-
-    printf("Opened midi port: %s\n", caps.szPname);
-
-    midi_buffer.lpData = midi_in_buffer;
-    midi_buffer.dwBufferLength = sizeof(midi_in_buffer);
-
-    auto r1 = midiInPrepareHeader(midi_handle, &midi_buffer, sizeof(MIDIHDR));
-    auto r2 = midiInAddBuffer(midi_handle, &midi_buffer, sizeof(MIDIHDR));
-    auto r3 = midiInStart(midi_handle);
 
     return 1;
 }
 
 void MIDI_Quit()
 {
-    if (midi_handle)
+    if (midi_in_handle)
     {
-        midiInStop(midi_handle);
-        midiInClose(midi_handle);
-        midi_handle = 0;
+        midiInStop(midi_in_handle);
+        midiInClose(midi_in_handle);
+        midi_in_handle = 0;
+    }
+    if (midi_out_handle)
+    {
+        midiOutClose(midi_out_handle);
+        midi_out_handle = 0;
+    }
+}
+
+void MIDI_PostShortMessge(uint8_t *message, int len) {
+    if (midi_out_handle) {
+        DWORD msg = 0;
+        for (int i = 0; i < len; i++) {
+            msg |= *message++ << i * 8;
+        }
+        midiOutShortMsg(midi_out_handle, msg);
+    }
+}
+void MIDI_PostSysExMessge(uint8_t *message, int len) {
+    if (midi_out_handle) {
+        MIDIHDR buffer;
+        memset(&buffer, 0, sizeof buffer);
+        buffer.dwBufferLength = len;
+        buffer.lpData = (LPSTR) message;
+        midiOutPrepareHeader(midi_out_handle, &buffer, sizeof buffer);
+        midiOutLongMsg(midi_out_handle, &buffer, sizeof buffer);
+        midiOutUnprepareHeader(midi_out_handle, &buffer, sizeof buffer);
     }
 }
 
@@ -157,6 +210,25 @@ int MIDI_GetMidiInDevices(char* devices) {
     MIDIINCAPSA caps;
     for (int i = 0; i < numDevices; i++) {
         if (midiInGetDevCapsA(i, &caps, sizeof caps) == MMSYSERR_NOERROR) {
+            int len = strlen(caps.szPname);
+            len = len >= 32 ? 32 : len;
+            if (devices != NULL) {
+                memcpy(devices + length, caps.szPname, len);
+                *(devices + length + len) = 0;
+            }
+            length += len;
+        }
+        length++;
+    }
+    return length;
+}
+
+int MIDI_GetMidiOutDevices(char* devices) {
+    int numDevices = midiOutGetNumDevs();
+    int length = 0;
+    MIDIOUTCAPSA caps;
+    for (int i = 0; i < numDevices; i++) {
+        if (midiOutGetDevCapsA(i, &caps, sizeof caps) == MMSYSERR_NOERROR) {
             int len = strlen(caps.szPname);
             len = len >= 32 ? 32 : len;
             if (devices != NULL) {

@@ -459,6 +459,8 @@ static const uint32_t uart_buffer_size = 8192;
 extern uint32_t uart_write_ptr;
 extern uint32_t uart_read_ptr;
 extern uint8_t uart_buffer[uart_buffer_size];
+extern uint8_t uart_tx_buffer[uart_buffer_size];
+extern uint8_t *uart_tx_ptr;
 
 uint8_t MCU_ReadP0(void);
 uint8_t MCU_ReadP1(void);

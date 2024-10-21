@@ -301,6 +301,8 @@ int ssr_rd = 0;
 uint32_t uart_write_ptr;
 uint32_t uart_read_ptr;
 uint8_t uart_buffer[uart_buffer_size];
+uint8_t uart_tx_buffer[uart_buffer_size];
+uint8_t *uart_tx_ptr = uart_tx_buffer;
 
 static uint8_t uart_rx_byte;
 static uint64_t uart_rx_delay;
@@ -999,7 +1001,75 @@ void MCU_UpdateUART_TX(void)
     dev_register[DEV_SSR] |= 0x80;
     MCU_Interrupt_SetRequest(INTERRUPT_SOURCE_UART_TX, (dev_register[DEV_SCR] & 0x80) != 0);
 
+    if (uart_tx_ptr - uart_tx_buffer >= uart_buffer_size)   {
+        printf("MIDI TX OVERFLOW\n");
+        return;
+    }
+
+    uint8_t data = dev_register[DEV_TDR];
+
+    if (data == 0xFE)
+        return; 
+
+    if (uart_tx_ptr == uart_tx_buffer && (data & 0x80) == 0) // Compressed message
+        uart_tx_ptr = uart_tx_buffer + 1;
+
+    *uart_tx_ptr++ = data;
+
     // printf("tx:%x\n", dev_register[DEV_TDR]);
+}
+
+void MCU_UpdateUART() {
+    if (uart_tx_ptr == uart_tx_buffer) return;
+    uint8_t *tx_buffer = uart_tx_buffer;
+    // do {
+    //     if (*tx_buffer == 0xFE) { // Active sense
+    //         tx_buffer++;
+    //     } else {
+    //         break;
+    //     }
+    // } while (tx_buffer != uart_tx_ptr);
+    if (uart_tx_ptr == tx_buffer) {
+        // uart_tx_ptr = uart_tx_buffer;
+        return;
+    }
+    int len;
+    uint8_t status = *tx_buffer;
+    if (status == 0xF0) {
+        if (*(uart_tx_ptr - 1) == 0xF7) {
+            len = uart_tx_ptr - tx_buffer;
+            MIDI_PostSysExMessge(tx_buffer, len);
+            // printf("TX: SysEx message", len);
+            // for (int i = 0; i < len; i++) printf(" %02X", *tx_buffer++);
+            // printf("\n");
+            uart_tx_ptr = uart_tx_buffer;
+        }
+    } else {
+        switch (status & 0xF0) {
+        case 0x80: // Note off
+        case 0x90: // Note on
+        case 0xA0: // Polyphonic pressure
+        case 0xB0: // Control change
+        case 0xE0: // Pitch bend
+            len = 3;
+            break;
+        case 0xC0: // Program change
+        case 0xD0: // Channel pressure
+            len = 2;
+            break;
+        default:
+            printf("Unknown status byte 0x%02X\n", status);
+            uart_tx_ptr = uart_tx_buffer;
+            return;
+        }
+        if (uart_tx_ptr - tx_buffer >= len) {
+            MIDI_PostSysExMessge(tx_buffer, len);
+            // printf("TX: Short message", status);
+            // for (int i = 0; i < len; i++) printf(" %02X", *tx_buffer++);
+            // printf("\n");
+            uart_tx_ptr = uart_tx_buffer;
+        }
+    }
 }
 
 static bool work_thread_run = false;
@@ -1062,6 +1132,7 @@ int SDLCALL work_thread(void* data)
             MCU_UpdateUART_TX();
         }
 
+        MCU_UpdateUART();
         MCU_UpdateAnalog(mcu.cycles);
 
         if (mcu_mk1)
@@ -1413,13 +1484,13 @@ int main(int argc, char *argv[])
     (void)argc;
     std::string basePath;
 
-    int port = 0;
+    int inport = 0, outport = -1;
     int audioDeviceIndex = -1;
     int pageSize = 512;
     int pageNum = 32;
     bool autodetect = true;
     ResetType resetType = ResetType::NONE;
-    char* pname = NULL;
+    char *inportname = NULL, *outportname = NULL;
 
     romset = ROM_SET_MK2;
 
@@ -1428,11 +1499,15 @@ int main(int argc, char *argv[])
         {
             if (!strncmp(argv[i], "-p:", 3))
             {
-                port = atoi(argv[i] + 3);
+                inport = atoi(argv[i] + 3);
             }
             else if (!strncmp(argv[i], "-pn:", 4))
             {
-                pname = argv[i] + 4;
+                inportname = argv[i] + 4;
+            }
+            else if (!strncmp(argv[i], "-po:", 4))
+            {
+                outport = atoi(argv[i] + 4);
             }
             else if (!strncmp(argv[i], "-a:", 3))
             {
@@ -1509,9 +1584,13 @@ int main(int argc, char *argv[])
                 printf("Options:\n");
                 printf("  -h, -help, --help              Display this information.\n");
                 printf("\n");
-                printf("  -p:<port_number>               Set MIDI port.\n");
+                printf("  -p:<port_number>               Set MIDI input port.\n");
+                printf("  -po:<port_number>              Set MIDI output port.\n");
+                printf("  -pn:<port_name>                Set MIDI input port.\n");
                 printf("  -a:<device_number>             Set Audio Device index.\n");
                 printf("  -ab:<page_size>:[page_count]   Set Audio Buffer size.\n");
+                printf("  -midiin <port_name>            Set MIDI input port.\n");
+                printf("  -midiout <port_name>           Set MIDI output port.\n");
                 printf("\n");
                 printf("  -mk2                           Use SC-55mk2 ROM set.\n");
                 printf("  -st                            Use SC-55st ROM set.\n");
@@ -1535,10 +1614,18 @@ int main(int argc, char *argv[])
                 romset = ROM_SET_SC155MK2;
                 autodetect = false;
             }
+            else if (!strcmp(argv[i], "-midiin") && i != argc - 1)
+            {
+                inportname = argv[++i];
+            }
+            else if (!strcmp(argv[i], "-midiout") && i != argc - 1)
+            {
+                outportname = argv[++i];
+            }
         }
     }
 
-    if (pname != NULL) {
+    if (inportname != NULL) {
         int portNo = 0;
         int length = MIDI_GetMidiInDevices(NULL);
         auto devices = new char[length];
@@ -1547,15 +1634,37 @@ int main(int argc, char *argv[])
         auto end = devices + length;
         while (start != end) {
             int len = strlen(start);
-            if (!MCU_stricmp(start, pname)) {
-                port = portNo;
+            if (!MCU_stricmp(start, inportname)) {
+                inport = portNo;
                 break;
             }
             start += len + 1;
             portNo++;
         }
-        if (port != portNo) {
-            printf("Port name \'%s\' not found.\n", pname);
+        if (inport != portNo) {
+            printf("Port name \'%s\' not found.\n", inportname);
+        }
+        delete[] devices;
+    }
+
+    if (outportname != NULL) {
+        int portNo = 0;
+        int length = MIDI_GetMidiOutDevices(NULL);
+        auto devices = new char[length];
+        length = MIDI_GetMidiOutDevices(devices);
+        auto start = devices;
+        auto end = devices + length;
+        while (start != end) {
+            int len = strlen(start);
+            if (!MCU_stricmp(start, outportname)) {
+                outport = portNo;
+                break;
+            }
+            start += len + 1;
+            portNo++;
+        }
+        if (outport != portNo) {
+            printf("Port name \'%s\' not found.\n", outportname);
         }
         delete[] devices;
     }
@@ -1820,9 +1929,9 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-    if(!MIDI_Init(port))
+    if(!MIDI_Init(inport, outport))
     {
-        fprintf(stderr, "ERROR: Failed to initialize the MIDI Input.\nWARNING: Continuing without MIDI Input...\n");
+        fprintf(stderr, "ERROR: Failed to initialize the MIDI Devices.\nWARNING: Continuing without MIDI Devices...\n");
         fflush(stderr);
     }
 
