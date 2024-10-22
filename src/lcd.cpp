@@ -52,6 +52,25 @@ static uint8_t LCD_CG[64];
 
 static uint8_t lcd_enable = 1;
 static bool lcd_quit_requested = false;
+static uint8_t lcd_contrast = 0;
+
+void LCD_SetContrast(uint8_t contrast)
+{
+    if (mcu_jv880)
+    {
+        if (contrast > 10)
+            contrast = 10;
+        lcd_contrast = contrast; // FIXME
+    }
+    else
+    {
+        if (contrast > 16)
+            contrast = 16;
+        if (contrast < 1)
+            contrast = 1;
+        lcd_contrast = contrast;
+    }
+}
 
 void LCD_Enable(uint32_t enable)
 {
@@ -298,7 +317,10 @@ void LCD_FontRenderStandard(int32_t x, int32_t y, uint8_t ch, bool overlay = fal
                 for (int jj = 0; jj < 5; jj++)
                 {
                     if (overlay)
-                        lcd_buffer[xx+ii][yy+jj] &= col;
+                    {
+                        if (lcd_buffer[xx+ii][yy+jj] != col && col == lcd_col1)
+                            lcd_buffer[xx+ii][yy+jj] = col;
+                    }
                     else
                         lcd_buffer[xx+ii][yy+jj] = col;
                 }
@@ -407,6 +429,19 @@ void LCD_FontRenderLR(uint8_t ch)
     }
 }
 
+static uint32_t inline LCD_MixColor(uint32_t color, uint8_t contrast)
+{
+    uint8_t b = (color >> 16) & 0xFF;
+    uint8_t g = (color >> 8) & 0xFF;
+    uint8_t r = color & 0xFF;
+
+    b = (b * contrast) >> 8;
+    g = (g * contrast) >> 8;
+    r = (r * contrast) >> 8;
+
+    return (color & 0xFF000000) | ((b & 0xFF) << 16) | ((g & 0xFF) << 8) | (r & 0xFF);
+}
+
 void LCD_Update(void)
 {
     if (!lcd_init)
@@ -439,6 +474,11 @@ void LCD_Update(void)
                 }
             }
 
+            uint32_t con = 0x11 * (lcd_contrast - 1);
+            con = (con * con) >> 8;
+            lcd_col2 = LCD_MixColor(lcd_buffer[0][0], 0xFF - (con / 4 + 4));
+            lcd_col1 = LCD_MixColor(lcd_col2, 0x11 * (16 - (((lcd_contrast + 1) >> 1) + 4)));
+
             if (mcu_jv880)
             {
                 for (int i = 0; i < 2; i++)
@@ -446,6 +486,7 @@ void LCD_Update(void)
                     for (int j = 0; j < 24; j++)
                     {
                         uint8_t ch = LCD_Data[i * 40 + j];
+                        LCD_FontRenderStandard(10 + i * 50, 4 + j * 34, ' ');
                         LCD_FontRenderStandard(4 + i * 50, 4 + j * 34, ch);
                     }
                 }
@@ -454,7 +495,7 @@ void LCD_Update(void)
                 int j = LCD_DD_RAM % 0x40;
                 int i = LCD_DD_RAM / 0x40;
                 if (i < 2 && j < 24 && LCD_C)
-                    LCD_FontRenderStandard(4 + i * 50, 4 + j * 34, '_', true);
+                    LCD_FontRenderStandard(10 + i * 50, 4 + j * 34, '_', true);
             }
             else
             {

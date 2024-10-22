@@ -50,3 +50,4 @@ void LCD_Enable(uint32_t enable);
 bool LCD_QuitRequested();
 void LCD_Sync(void);
 void LCD_Update(void);
+void LCD_SetContrast(uint8_t contrast);
