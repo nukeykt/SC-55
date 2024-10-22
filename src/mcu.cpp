@@ -358,6 +358,10 @@ void MCU_DeviceWrite(uint32_t address, uint8_t data)
     case DEV_IPRD:
         break;
     case DEV_PWM1_DTR:
+        if (mcu_jv880)
+            LCD_SetContrast(10 - (data / 11));
+        else
+            LCD_SetContrast(16 - (data >> 4));
         break;
     case DEV_PWM1_TCR:
         break;
