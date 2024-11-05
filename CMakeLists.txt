@@ -125,4 +125,3 @@ install(TARGETS nuked-sc55)
 install(FILES data/back.data DESTINATION ${CMAKE_INSTALL_DATADIR}/nuked-sc55)
 install(FILES data/sc55mkII_background.bmp DESTINATION ${CMAKE_INSTALL_DATADIR}/nuked-sc55)
 install(FILES data/SC55-icon.ico DESTINATION ${CMAKE_INSTALL_DATADIR}/nuked-sc55)
-SC55-icon.ico
