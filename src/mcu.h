@@ -243,6 +243,8 @@ struct mcu_t {
     uint32_t uart_write_ptr = 0;
     uint32_t uart_read_ptr = 0;
     uint8_t uart_buffer[uart_buffer_size]{};
+    uint8_t uart_tx_buffer[uart_buffer_size]{};
+    uint8_t *uart_tx_ptr = uart_tx_buffer;
 
     uint8_t uart_rx_byte = 0;
     uint64_t uart_rx_delay = 0;
@@ -283,6 +285,8 @@ struct mcu_t {
     uint8_t operand_status = 0;
     uint16_t operand_data = 0;
     uint8_t opcode_extended = 0;
+
+    uint16_t volume = 8250;
 
     void* callback_userdata = nullptr;
     mcu_sample_callback sample_callback = MCU_DefaultSampleCallback;
@@ -475,6 +479,11 @@ inline uint16_t MCU_PopStack(mcu_t& mcu)
     ret = MCU_Read16(mcu, mcu.r[7]);
     mcu.r[7] += 2;
     return ret;
+}
+
+inline void MCU_SetVolume(mcu_t& mcu, uint16_t volume)
+{
+    mcu.volume = volume;
 }
 
 enum {

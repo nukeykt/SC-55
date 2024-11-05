@@ -11,12 +11,13 @@ Differences from upstream:
 - Produces a library for the emulator.
 - Standard frontend supports routing to multiple emulators to raise polyphony
   limits.
-- Includes a MIDI-to-WAVE rendererer.
+- Includes a MIDI-to-WAVE rendererer. (Broken & disabled looking for fix)
 - Adds tests so that the backend can be modified without worrying about
   breaking things.
 - Command line is handled slightly differently. Pass `--help` to a binary to
   see what arguments it accepts.
 - Improved performance without sacrificing accuracy.
+- Added GUI support
 
 ## Building
 

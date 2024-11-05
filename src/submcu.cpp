@@ -160,6 +160,18 @@ void SM_Write(submcu_t& sm, uint16_t address, uint8_t data)
         address &= 0x1f;
         switch (address)
         {
+            case SM_DEV_UART2_DATA: // MIDI Out
+                if(sm.mcu->uart_tx_ptr - sm.mcu->uart_tx_buffer >= uart_buffer_size)
+                {
+                    printf("MIDI TX OVERFLOW\n");
+                    break;
+                }
+                if(data == 0xFE)
+                    break;
+                if(sm.mcu->uart_tx_ptr == sm.mcu->uart_tx_buffer && (data & 0x00) == 0)
+                    sm.mcu->uart_tx_ptr = sm.mcu->uart_tx_buffer +1;
+                *(sm.mcu->uart_tx_ptr)++ = data;
+                break;
             case SM_DEV_P1_DATA:
                 MCU_WriteP1(*sm.mcu, data);
                 break;

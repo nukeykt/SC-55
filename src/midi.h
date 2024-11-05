@@ -37,7 +37,8 @@
 
 struct FE_Application;
 
-bool MIDI_Init(FE_Application& fe, std::string_view port_name_or_id);
+bool MIDI_Init(FE_Application& fe, std::string_view in_port_name_or_id, std::string_view out_port_name_or_id);
 void MIDI_Quit(void);
 void MIDI_PrintDevices();
-
+void MIDI_PostShortMessage(uint8_t *message, int len);
+void MIDI_PostSysExMessage(uint8_t *message, int len);

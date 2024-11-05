@@ -38,6 +38,31 @@
 #include "mcu_interrupt.h"
 #include "pcm.h"
 
+void PCM_AdjustVolume(pcm_t &pcm ,int32_t &left, int32_t &right)
+{
+    left >>= 12;
+    right >>= 12;
+
+    int32_t volumeH = (pcm.mcu->volume >> 4) & 0xFFF;
+    int32_t volumeL = pcm.mcu->volume & 0xF;
+
+    left = ((left * volumeH) >> 12) + ((left * volumeL) >> 16);
+    right = ((right * volumeH) >> 12) + ((right * volumeL) >> 16);
+
+    if(left > INT32_MAX)
+        left = INT32_MAX;
+    else if(left < INT32_MIN)
+        left = INT32_MIN;
+
+    if(right > INT32_MAX)
+        right = INT32_MAX;
+    else if(right < INT32_MIN)
+        right = INT32_MIN; 
+
+    left <<= 12;
+    right <<= 12;
+}
+
 uint8_t PCM_ReadROM(pcm_t& pcm, uint32_t address)
 {
     int bank;
@@ -610,6 +635,8 @@ void PCM_Update(pcm_t& pcm, uint64_t cycles)
             int32_t samp_l = (int32_t)((pcm.ram1[30][2] & ~pcm.config.write_mask) << 12);
             int32_t samp_r = (int32_t)((pcm.ram1[30][4] & ~pcm.config.write_mask) << 12);
 
+            PCM_AdjustVolume(pcm, samp_l, samp_r);
+
             MCU_PostSample(*pcm.mcu, {samp_l, samp_r});
 
             xr = ((shifter >> 0) ^ (shifter >> 1) ^ (shifter >> 7) ^ (shifter >> 12)) & 1;
@@ -632,8 +659,10 @@ void PCM_Update(pcm_t& pcm, uint64_t cycles)
                 pcm.ram1[30][1] = pcm.accum_r & pcm.config.write_mask;
 
 
-                samp_l = (int32_t)((pcm.ram1[30][3] & ~pcm.config.write_mask) << 12);
-                samp_r = (int32_t)((pcm.ram1[30][5] & ~pcm.config.write_mask) << 12);
+                samp_l = ((pcm.ram1[30][3] & ~pcm.config.write_mask) << 12);
+                samp_r = ((pcm.ram1[30][5] & ~pcm.config.write_mask) << 12);
+
+                PCM_AdjustVolume(pcm, samp_l, samp_r);
 
                 MCU_PostSample(*pcm.mcu, {samp_l, samp_r});
             }

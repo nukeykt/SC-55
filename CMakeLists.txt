@@ -4,6 +4,26 @@ project (NukedSC55 VERSION 0.2.0 LANGUAGES CXX)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 #==============================================================================
+# Copy back.data, background and icon
+#==============================================================================
+
+macro(copy_rom_target TargetName TargetFile)
+    add_custom_target(sc55_copy_${TargetName} ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${TargetFile}")
+    add_custom_command(
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${TargetFile}"
+        COMMAND ${CMAKE_COMMAND} -E copy
+                "${CMAKE_CURRENT_SOURCE_DIR}/data/${TargetFile}"
+                "${CMAKE_CURRENT_BINARY_DIR}/${TargetFile}"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/${TargetFile}"
+    )
+    list(APPEND SC55_INSTALL_FILES ${CMAKE_CURRENT_BINARY_DIR}/${TargetFile})
+endmacro()
+
+copy_rom_target(back_data back.data)
+copy_rom_target(sc55mkII_background.bmp sc55mkII_background.bmp)
+copy_rom_target(SC55-icon.ico SC55-icon.ico)
+
+#==============================================================================
 # Tests
 #==============================================================================
 option(NUKED_ENABLE_TESTS "Enable tests" OFF)
@@ -118,24 +138,8 @@ if(APPLE)
 endif()
 
 #==============================================================================
-# Renderer Frontend
-#==============================================================================
-add_executable(nuked-sc55-render)
-target_sources(nuked-sc55-render
-    PRIVATE
-    src/render_frontend.cpp
-    src/smf.cpp src/smf.h
-    src/wav.cpp src/wav.h
-)
-
-target_link_libraries(nuked-sc55-render PRIVATE nuked-sc55-backend)
-target_compile_features(nuked-sc55-render PRIVATE cxx_std_23)
-target_enable_warnings(nuked-sc55-render)
-target_enable_conversion_warnings(nuked-sc55-render)
-
-#==============================================================================
 # Installables
 #==============================================================================
 include(GNUInstallDirs)
-install(TARGETS nuked-sc55 nuked-sc55-render)
+install(TARGETS nuked-sc55)
 install(FILES data/back.data DESTINATION ${CMAKE_INSTALL_DATADIR}/nuked-sc55)

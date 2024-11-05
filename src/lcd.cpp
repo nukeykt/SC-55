@@ -44,9 +44,71 @@
 #include "emu.h"
 #include <fstream>
 
+const SDL_Rect lcd_button_regions_sc55[32] = {
+    {38, 36, 67, 19}, // Power
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {968, 38, 53, 18}, // Instrument
+    {1024, 38, 53, 18},
+    {754, 82, 26, 26}, // Mute
+    {754, 35, 26, 26}, // All
+    {0, 0, 0, 0},
+    {968, 178, 53, 18}, // MIDI ch
+    {1024, 178, 53, 18},
+    {968, 132, 53, 18}, // Chorus
+    {1024, 132, 53, 18},
+    {968, 85, 53, 18}, // Pan
+    {1024, 85, 53, 18},
+    {903, 37, 53, 18}, // Part R
+    {0, 0, 0, 0},
+    {831, 178, 53, 18}, // Key shift
+    {887, 178, 53, 18},
+    {831, 132, 53, 18}, // Reverb
+    {887, 132, 53, 18},
+    {831, 85, 53, 18}, // Level
+    {887, 85, 53, 18},
+    {849, 37, 53, 18}, // Part L
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0}
+};
+
+uint32_t inline LCD_MixColor(uint32_t color, uint8_t contrast) {
+    uint8_t b = (color >> 16) & 0xFF;
+    uint8_t g = (color >> 8) & 0xFF;
+    uint8_t r = color & 0xFF;
+
+    b = (b * contrast) >> 8;
+    g = (g * contrast) >> 8;
+    r = (r * contrast) >> 8;
+
+    return (color & 0xFF000000) | ((b & 0xFF) << 16) | ((g & 0xFF) << 8) | (r & 0xFF);
+}
+
 void LCD_Enable(lcd_t& lcd, uint32_t enable)
 {
     lcd.enable = enable;
+}
+
+void LCD_ButtonEnable(lcd_t& lcd, uint8_t enable)
+{
+    lcd.button_enable = enable;
+}
+
+void LCD_SetContrast(lcd_t& lcd, uint8_t contrast)
+{
+    if (contrast > 16)
+        contrast = 16;
+    else if(contrast < 1)
+        contrast = 1;
+
+    lcd.contrast = contrast;
 }
 
 bool LCD_QuitRequested(lcd_t& lcd)
@@ -214,17 +276,38 @@ void LCD_Init(lcd_t& lcd, mcu_t& mcu)
 
 bool LCD_CreateWindow(lcd_t& lcd)
 {
+    SDL_Surface *background_image = nullptr;
+    background_image = SDL_LoadBMP("sc55mkII_background.bmp");
+
+    size_t screen_width = 0;
+    size_t screen_height = 0;
+
     if (lcd.mcu->romset == Romset::JV880)
     {
         lcd.width = 820;
         lcd.height = 100;
+        screen_width = lcd.width;
+        screen_height = lcd.height;
         lcd.color1 = 0x000000;
         lcd.color2 = 0x78b500;
+    }
+    else if(lcd.mcu->romset == Romset::MK2 && background_image)
+    {
+        
+        lcd.width = 741;
+        lcd.height = 268;
+        screen_width = 1120;
+        screen_height = 233;
+        lcd.color1 = 0x000000;
+        lcd.color2 = 0x0050c8;
+        lcd.background_enabled = 1;
     }
     else
     {
         lcd.width = 741;
         lcd.height = 268;
+        screen_width = lcd.width;
+        screen_height = lcd.height;
         lcd.color1 = 0x000000;
         lcd.color2 = 0x0050c8;
     }
@@ -233,7 +316,7 @@ bool LCD_CreateWindow(lcd_t& lcd)
 
     title += EMU_RomsetName(lcd.mcu->romset);
 
-    lcd.window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, lcd.width, lcd.height, SDL_WINDOW_SHOWN);
+    lcd.window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_SHOWN);
     if (!lcd.window)
         return false;
 
@@ -241,10 +324,19 @@ bool LCD_CreateWindow(lcd_t& lcd)
     if (!lcd.renderer)
         return false;
 
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "BEST");
+
     lcd.texture = SDL_CreateTexture(lcd.renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, lcd.width, lcd.height);
 
     if (!lcd.texture)
         return false;
+
+    if(lcd.background_enabled)
+    {
+        lcd.background_image = SDL_CreateTextureFromSurface(lcd.renderer, background_image);
+        if(!lcd.background_image)
+            return false;
+    }
 
     return true;
 }
@@ -255,6 +347,11 @@ void LCD_UnInit(lcd_t& lcd)
     {
         SDL_DestroyTexture(lcd.texture);
         lcd.texture = nullptr;
+    }
+    if (lcd.background_image)
+    {
+        SDL_DestroyTexture(lcd.background_image);
+        lcd.background_image = nullptr;
     }
     if (lcd.renderer)
     {
@@ -295,7 +392,10 @@ void LCD_FontRenderStandard(lcd_t& lcd, int32_t x, int32_t y, uint8_t ch, bool o
                 for (int jj = 0; jj < 5; jj++)
                 {
                     if (overlay)
-                        lcd.buffer[xx+ii][yy+jj] &= col;
+                    {
+                        if (lcd.buffer[xx+ii][yy+jj] != col && col == lcd.color1)
+                            lcd.buffer[xx+ii][yy+jj] = col;
+                    }
                     else
                         lcd.buffer[xx+ii][yy+jj] = col;
                 }
@@ -410,9 +510,19 @@ void LCD_Update(lcd_t& lcd)
     {
         MCU_WorkThread_Lock(*lcd.mcu);
 
+        uint8_t contrast = lcd.contrast;
+
         if (!lcd.enable && !lcd.mcu->is_jv880)
         {
-            memset(lcd.buffer, 0, sizeof(lcd.buffer));
+            contrast = 1;
+            memset(lcd.LCD_Data, ' ', sizeof(lcd.LCD_Data));
+            for (size_t i = 0; i < lcd.height; i++) 
+            {
+                for (size_t j = 0; j < lcd.width; j++) 
+                {
+                    lcd.buffer[i][j] = (lcd.background[i][j] & 0xF0F000) >> 2;
+                }
+            }
         }
         else
         {
@@ -432,6 +542,11 @@ void LCD_Update(lcd_t& lcd)
                     }
                 }
             }
+
+            uint32_t con = 0x11 * (contrast - 1);
+            con = (con * con) >> 8;
+            lcd.color2 = LCD_MixColor(lcd.buffer[0][0], 0xFF - (con / 4 + 4));
+            lcd.color1 = LCD_MixColor(lcd.color2, 0x11 * (16 - (((contrast + 1) >> 1) + 4)));
 
             if (lcd.mcu->is_jv880)
             {
@@ -508,14 +623,160 @@ void LCD_Update(lcd_t& lcd)
 
         MCU_WorkThread_Unlock(*lcd.mcu);
 
-        SDL_UpdateTexture(lcd.texture, NULL, lcd.buffer, lcd_width_max * 4);
-        SDL_RenderCopy(lcd.renderer, lcd.texture, NULL, NULL);
+        SDL_Rect rect;
+        rect.x = 0;
+        rect.y = 0;
+        rect.w = lcd.width;
+        rect.h = lcd.height;
+        SDL_UpdateTexture(lcd.texture, &rect, lcd.buffer, lcd_width_max * 4);
+
+        if (lcd.mcu->romset == Romset::MK2 && lcd.background_enabled) {
+            SDL_Rect srcrect, dstrect;
+            srcrect.x = 0;
+            srcrect.y = 0;
+            srcrect.w = 2240;
+            srcrect.h = 466;
+            SDL_RenderCopy(lcd.renderer, lcd.background_image, &srcrect, NULL);
+            if ((lcd.button_enable & 1) != 0 || (lcd.button_enable & 2) != 0) {
+                srcrect.x = 0;
+                srcrect.y = 466;
+                srcrect.w = 52;
+                srcrect.h = 52;
+                dstrect.x = 754;
+                dstrect.w = 26;
+                dstrect.h = 26;
+                if ((lcd.button_enable & 1) != 0) { // ALL
+                    dstrect.y = 35;
+                    SDL_RenderCopy(lcd.renderer, lcd.background_image, &srcrect, &dstrect);
+                }
+                if ((lcd.button_enable & 2) != 0) { // MUTE
+                    dstrect.y = 82;
+                    SDL_RenderCopy(lcd.renderer, lcd.background_image, &srcrect, &dstrect);
+                }
+            }
+            if ((lcd.button_enable & 4) != 0) { // STANDBY
+                srcrect.x = 0;
+                srcrect.y = 518;
+                srcrect.w = 20;
+                srcrect.h = 20;
+                dstrect.x = 118;
+                dstrect.y = 42;
+                dstrect.w = 10;
+                dstrect.h = 10;
+                SDL_RenderCopy(lcd.renderer, lcd.background_image, &srcrect, &dstrect);
+            }
+            { // Volume
+                srcrect.x = 54;
+                srcrect.y = 468;
+                srcrect.w = 118;
+                srcrect.h = 118;
+                dstrect.x = 153;
+                dstrect.y = 42;
+                dstrect.w = 59;
+                dstrect.h = 59;
+                SDL_RenderCopyEx(lcd.renderer, lcd.background_image, &srcrect, &dstrect, (lcd.volume - 0.5f) * 300.0, NULL, SDL_FLIP_NONE);
+            }
+            srcrect.x = 0;
+            srcrect.y = 0;
+            srcrect.w = 740;
+            srcrect.h = 268;
+            dstrect.x = 283;
+            dstrect.y = 49;
+            dstrect.w = 370;
+            dstrect.h = 134;
+            SDL_RenderCopy(lcd.renderer, lcd.texture, &srcrect, &dstrect);
+        } else {
+            SDL_RenderCopy(lcd.renderer, lcd.texture, NULL, NULL);
+        }
         SDL_RenderPresent(lcd.renderer);
     }
 }
 
 void LCD_HandleEvent(lcd_t& lcd, const SDL_Event& sdl_event)
 {
+    if (lcd.mcu->romset == Romset::MK2 && lcd.background_enabled) 
+    {
+        switch (sdl_event.type)
+        {
+        case SDL_MOUSEBUTTONUP:
+        case SDL_MOUSEBUTTONDOWN: {
+            if (sdl_event.button.button == 1) {
+                if (lcd.drag_volume_knob || (sdl_event.button.x >= 153 && sdl_event.button.x <= 212 && sdl_event.button.y >= 42 && sdl_event.button.y <= 101)) {
+                    lcd.drag_volume_knob = (sdl_event.type == SDL_MOUSEBUTTONDOWN) || (lcd.drag_volume_knob && sdl_event.type != SDL_MOUSEBUTTONUP);
+                }
+            }
+            int32_t x = sdl_event.button.x;
+            int32_t y = sdl_event.button.y;
+            int mask = 0;
+            uint32_t button_pressed = lcd.mcu->button_pressed;
+            for (int i = 0; i < 32; i++) {
+                const SDL_Rect *rect = &lcd_button_regions_sc55[i];
+                if (rect->x == 0 && rect->y == 0 && rect->w == 0 && rect->h == 0) continue;
+                if (x >= rect->x && x <= rect->x + rect->w && y >= rect->y && y <= rect->y + rect->h) {
+                    mask |= 1 << i;
+                }
+            }
+            if (sdl_event.type == SDL_MOUSEBUTTONDOWN)
+                button_pressed |= mask;
+            else
+                button_pressed &= ~mask;
+            lcd.mcu->button_pressed = button_pressed;
+            break;
+        }
+        case SDL_MOUSEMOTION:
+            if (lcd.drag_volume_knob) {
+                int32_t relval = abs(sdl_event.motion.xrel) > abs(sdl_event.motion.yrel) ? sdl_event.motion.xrel : (lcd.volume > 0.5f ? sdl_event.motion.yrel : -sdl_event.motion.yrel);
+                if (relval > 50) { // Maximum ±10dB incremental
+                    relval = 50;
+                }
+                if (relval < -50) {
+                    relval = -50;
+                }
+                lcd.volume += relval / (lcd.volume > 0.775f ? 10000.0f : 400.0f); // Prevent someone make sound too loud (like me)
+                if (lcd.volume > 1.0f) {
+                    lcd.volume = 1.0f;
+                }
+                if (lcd.volume < 0.0f) {
+                    lcd.volume = 0.0f;
+                }
+                if (lcd.volume != 0.0f) {
+                    float vol = powf(10.0f, (-80.0f * (1.0f - lcd.volume)) / 20.0f); // or volume ^ 8 (0 < volume < 1)
+                    MCU_SetVolume(*lcd.mcu, (uint16_t) (vol * 2 *UINT16_MAX));
+                } else {
+                    MCU_SetVolume(*lcd.mcu, 0);
+                }
+            }
+            break;
+        case SDL_MOUSEWHEEL:
+            if (sdl_event.wheel.mouseX >= 153 && sdl_event.wheel.mouseX <= 212 && sdl_event.wheel.mouseY >= 42 && sdl_event.wheel.mouseY <= 101) {
+                int32_t relval = sdl_event.wheel.y;
+                if (relval > 10) { // Maximum ±2dB incremental
+                    relval = 10;
+                }
+                if (relval < -10) {
+                    relval = -10;
+                }
+                lcd.volume += relval / 400.0f;
+                if (lcd.volume > 1.0f) {
+                    lcd.volume = 1.0f;
+                }
+                if (lcd.volume < 0.0f) {
+                    lcd.volume = 0.0f;
+                }
+                if (lcd.volume != 0.0f) {
+                    float vol = powf(10.0f, (-80.0f * (1.0f - lcd.volume)) / 20.0f); // or volume ^ 8 (0 < volume < 1)
+                    MCU_SetVolume(*lcd.mcu, (uint16_t) (vol * 2 * UINT16_MAX));
+                } else {
+                    MCU_SetVolume(*lcd.mcu, 0);
+                }
+            }
+            break;
+
+        default:
+            break;
+        }
+    }
+
     switch (sdl_event.type)
     {
         case SDL_KEYDOWN:

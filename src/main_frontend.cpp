@@ -106,7 +106,8 @@ struct FE_Application {
 struct FE_Parameters
 {
     bool help = false;
-    std::string midi_device;
+    std::string midiin_device;
+    std::string midiout_device;
     std::string audio_device;
     uint32_t page_size = 512;
     uint32_t page_num = 32;
@@ -657,14 +658,23 @@ FE_ParseError FE_ParseCommandLine(int argc, char* argv[], FE_Parameters& result)
             result.help = true;
             return FE_ParseError::Success;
         }
-        else if (reader.Any("-p", "--port"))
+        else if (reader.Any("-pi", "--portin"))
         {
             if (!reader.Next())
             {
                 return FE_ParseError::UnexpectedEnd;
             }
 
-            result.midi_device = reader.Arg();
+            result.midiin_device = reader.Arg();
+        }
+        else if (reader.Any("-po", "--portout"))
+        {
+            if (!reader.Next())
+            {
+                return FE_ParseError::UnexpectedEnd;
+            }
+
+            result.midiout_device = reader.Arg();
         }
         else if (reader.Any("-a", "--audio-device"))
         {
@@ -848,7 +858,8 @@ General options:
   -?, -h, --help                                Display this information.
 
 Audio options:
-  -p, --port         <device_name_or_number>    Set MIDI input port.
+  -pi, --portin      <device_name_or_number>    Set MIDI input port.
+  -po, --portout     <device_name_or_number>    Set MIDI output port.
   -a, --audio-device <device_name_or_number>    Set output audio device.
   -b, --buffer-size  <page_size>[:page_count]   Set Audio Buffer size.
   -f, --format       s16|s32|f32                Set output format.
@@ -957,9 +968,9 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (!MIDI_Init(frontend, params.midi_device))
+    if (!MIDI_Init(frontend, params.midiin_device, params.midiout_device))
     {
-        fprintf(stderr, "ERROR: Failed to initialize the MIDI Input.\nWARNING: Continuing without MIDI Input...\n");
+        fprintf(stderr, "ERROR: Failed to initialize the MIDI Ports.\nWARNING: Continuing without MIDI Ports...\n");
         fflush(stderr);
     }
 

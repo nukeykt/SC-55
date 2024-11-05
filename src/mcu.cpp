@@ -31,12 +31,14 @@
  *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  */
+#include "SDL.h"
 #include "mcu.h"
 #include "mcu_timer.h"
 #include "mcu_opcodes.h"
 #include "submcu.h"
 #include "pcm.h"
 #include "lcd.h"
+#include "midi.h"
 
 void MCU_ErrorTrap(mcu_t& mcu)
 {
@@ -214,6 +216,7 @@ void MCU_DeviceWrite(mcu_t& mcu, uint32_t address, uint8_t data)
     case DEV_IPRD:
         break;
     case DEV_PWM1_DTR:
+        LCD_SetContrast(*mcu.lcd, 16 - (data >> 4));
         break;
     case DEV_PWM1_TCR:
         break;
@@ -856,7 +859,69 @@ void MCU_UpdateUART_TX(mcu_t& mcu)
     mcu.dev_register[DEV_SSR] |= 0x80;
     MCU_Interrupt_SetRequest(mcu, INTERRUPT_SOURCE_UART_TX, (mcu.dev_register[DEV_SCR] & 0x80) != 0);
 
+    if (mcu.uart_tx_ptr - mcu.uart_tx_buffer >= uart_buffer_size)   {
+        printf("MIDI TX OVERFLOW\n");
+        return;
+    }
+
+    uint8_t data = mcu.dev_register[DEV_TDR];
+
+    if (data == 0xFE)
+        return; 
+
+    if (mcu.uart_tx_ptr == mcu.uart_tx_buffer && (data & 0x80) == 0) // Compressed message
+        mcu.uart_tx_ptr = mcu.uart_tx_buffer + 1;
+
+    *mcu.uart_tx_ptr++ = data;
+
     // fprintf(stderr, "tx:%x\n", mcu.dev_register[DEV_TDR]);
+}
+
+void MCU_UpdateUART(mcu_t& mcu)
+{
+    if(mcu.uart_tx_ptr == mcu.uart_tx_buffer)
+        return;
+    
+    uint8_t *tx_buffer = mcu.uart_tx_buffer;
+
+    if (mcu.uart_tx_ptr == tx_buffer)
+        return;
+
+    int len;
+    uint8_t status = *tx_buffer;
+    if (status == 0xF0) {
+        if (*(mcu.uart_tx_ptr - 1) == 0xF7) 
+        {
+            len = mcu.uart_tx_ptr - tx_buffer;
+            MIDI_PostSysExMessage(tx_buffer, len);
+            mcu.uart_tx_ptr = mcu.uart_tx_buffer;
+        }
+    } 
+    else 
+    {
+        switch (status & 0xF0) {
+            case 0x80: // Note off
+            case 0x90: // Note on
+            case 0xA0: // Polyphonic pressure
+            case 0xB0: // Control change
+            case 0xE0: // Pitch bend
+                len = 3;
+                break;
+            case 0xC0: // Program change
+            case 0xD0: // Channel pressure
+                len = 2;
+                break;
+            default:
+                printf("Unknown status byte 0x%02X\n", status);
+                mcu.uart_tx_ptr = mcu.uart_tx_buffer;
+                return;
+        }
+        if (mcu.uart_tx_ptr - tx_buffer >= len) 
+        {
+            MIDI_PostSysExMessage(tx_buffer, len);
+            mcu.uart_tx_ptr = mcu.uart_tx_buffer;
+        }
+    }
 }
 
 void MCU_WorkThread_Lock(mcu_t& mcu)
@@ -896,6 +961,7 @@ void MCU_Step(mcu_t& mcu)
         MCU_UpdateUART_TX(mcu);
     }
 
+    MCU_UpdateUART(mcu);
     MCU_UpdateAnalog(mcu, mcu.cycles);
 
     if (mcu.is_mk1)
@@ -946,6 +1012,18 @@ uint8_t MCU_ReadP1(mcu_t& mcu)
 void MCU_WriteP0(mcu_t& mcu, uint8_t data)
 {
     mcu.p0_data = data;
+
+    uint8_t state = 0;
+    if ((data & 0x40) == 0) {
+        state |= 1;
+    }
+    if ((data & 0x20) == 0) {
+        state |= 2;
+    }
+    if ((data & 0x10) == 0) {
+        state |= 4;
+    }
+    LCD_ButtonEnable(*mcu.lcd, state);
 }
 
 void MCU_WriteP1(mcu_t& mcu, uint8_t data)
@@ -977,4 +1055,3 @@ void MCU_EncoderTrigger(mcu_t& mcu, int dir)
     MCU_GA_SetGAInt(mcu, dir == 0 ? 3 : 4, 0);
     MCU_GA_SetGAInt(mcu, dir == 0 ? 3 : 4, 1);
 }
-
