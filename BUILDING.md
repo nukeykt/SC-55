@@ -15,7 +15,7 @@ Tested compilers:
 Full build
 
 ```bash
-git clone git@github.com:jcmoyer/Nuked-SC55.git
+git clone git@github.com:linoshkmalayil/Nuked-SC55.git
 cd Nuked-SC55
 mkdir build
 cd build

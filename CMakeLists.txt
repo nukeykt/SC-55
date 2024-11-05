@@ -4,26 +4,6 @@ project (NukedSC55 VERSION 0.2.0 LANGUAGES CXX)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 #==============================================================================
-# Copy back.data, background and icon
-#==============================================================================
-
-macro(copy_rom_target TargetName TargetFile)
-    add_custom_target(sc55_copy_${TargetName} ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${TargetFile}")
-    add_custom_command(
-        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${TargetFile}"
-        COMMAND ${CMAKE_COMMAND} -E copy
-                "${CMAKE_CURRENT_SOURCE_DIR}/data/${TargetFile}"
-                "${CMAKE_CURRENT_BINARY_DIR}/${TargetFile}"
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/${TargetFile}"
-    )
-    list(APPEND SC55_INSTALL_FILES ${CMAKE_CURRENT_BINARY_DIR}/${TargetFile})
-endmacro()
-
-copy_rom_target(back_data back.data)
-copy_rom_target(sc55mkII_background.bmp sc55mkII_background.bmp)
-copy_rom_target(SC55-icon.ico SC55-icon.ico)
-
-#==============================================================================
 # Tests
 #==============================================================================
 option(NUKED_ENABLE_TESTS "Enable tests" OFF)
@@ -143,3 +123,6 @@ endif()
 include(GNUInstallDirs)
 install(TARGETS nuked-sc55)
 install(FILES data/back.data DESTINATION ${CMAKE_INSTALL_DATADIR}/nuked-sc55)
+install(FILES data/sc55mkII_background.bmp DESTINATION ${CMAKE_INSTALL_DATADIR}/nuked-sc55)
+install(FILES data/SC55-icon.ico DESTINATION ${CMAKE_INSTALL_DATADIR}/nuked-sc55)
+SC55-icon.ico

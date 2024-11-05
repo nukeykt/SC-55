@@ -1,10 +1,8 @@
 # Nuked SC-55
 
-Fork of [nukeykt/Nuked-SC55](https://github.com/nukeykt/Nuked-SC55) with the
-goal of extracting the emulator backend so that it can be used in other
-programs. This fork aims to be 100% behavior-compatible with upstream
-(including bugs). For bugs that occur in both this fork and upstream, do not
-open an issue here; report it upstream instead.
+Fork of [nukeykt/Nuked-SC55](https://github.com/nukeykt/Nuked-SC55) with
+the optimization work of jcmoyer [jcmoyer/Nuked-SC55](https://github.com/jcmoyer/Nuked-SC55)
+and GUI code work of mckuhei [mckuhei/Nuked-SC55](https://github.com/mckuhei/Nuked-SC55).
 
 Differences from upstream:
 
@@ -17,7 +15,8 @@ Differences from upstream:
 - Command line is handled slightly differently. Pass `--help` to a binary to
   see what arguments it accepts.
 - Improved performance without sacrificing accuracy.
-- Added GUI support
+- Added GUI support and LCD Contrast.
+- Added volume adjustment. (Currently buggy)
 
 ## Building
 
