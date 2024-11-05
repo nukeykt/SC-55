@@ -33,9 +33,18 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
+#include <atomic>
+#include <thread>
+#include <mutex>
 #include "mcu_interrupt.h"
-#include "SDL_atomic.h"
+#include "cast.h"
+#include "audio.h"
+
+struct submcu_t;
+struct pcm_t;
+struct mcu_timer_t;
+struct lcd_t;
 
 enum {
     DEV_P1DDR = 0x00,
@@ -101,8 +110,6 @@ enum {
     DEV_P9DDR = 0x7e,
     DEV_P9DR = 0x7f,
 };
-
-extern uint8_t dev_register[0x80];
 
 const uint16_t sr_mask = 0x870f;
 enum {
@@ -174,55 +181,153 @@ enum {
     VECTOR_INTERNAL_INTERRUPT_E0, // ADI
 };
 
+static const int ROM1_SIZE = 0x8000;
+static const int ROM2_SIZE = 0x80000;
+static const int RAM_SIZE = 0x400;
+static const int SRAM_SIZE = 0x8000;
+static const int NVRAM_SIZE = 0x8000; // JV880 only
+static const int CARDRAM_SIZE = 0x8000; // JV880 only
+static const int ROMSM_SIZE = 0x1000;
 
-struct mcu_t {
-    uint16_t r[8];
-    uint16_t pc;
-    uint16_t sr;
-    uint8_t cp, dp, ep, tp, br;
-    uint8_t sleep;
-    uint8_t ex_ignore;
-    int32_t exception_pending;
-    uint8_t interrupt_pending[INTERRUPT_SOURCE_MAX];
-    uint8_t trapa_pending[16];
-    uint64_t cycles;
+static const uint32_t uart_buffer_size = 8192;
+
+enum class Romset {
+    MK2,
+    ST,
+    MK1,
+    CM300,
+    JV880,
+    SCB55,
+    RLP3237,
+    SC155,
+    SC155MK2,
 };
 
-extern mcu_t mcu;
+constexpr size_t ROMSET_COUNT = 9;
 
-void MCU_ErrorTrap(void);
+typedef void(*mcu_sample_callback)(void* userdata, const AudioFrame<int32_t>& frame);
 
-uint8_t MCU_Read(uint32_t address);
-uint16_t MCU_Read16(uint32_t address);
-uint32_t MCU_Read32(uint32_t address);
-void MCU_Write(uint32_t address, uint8_t value);
-void MCU_Write16(uint32_t address, uint16_t value);
+void MCU_DefaultSampleCallback(void* userdata, const AudioFrame<int32_t>& frame);
+
+struct mcu_t {
+    uint16_t r[8]{};
+    uint16_t pc = 0;
+    uint16_t sr = 0;
+    uint8_t cp = 0, dp = 0, ep = 0, tp = 0, br = 0;
+    uint8_t sleep = 0;
+    uint8_t ex_ignore = 0;
+    int32_t exception_pending = 0;
+    uint8_t interrupt_pending[INTERRUPT_SOURCE_MAX]{};
+    uint8_t trapa_pending[16]{};
+    uint64_t cycles = 0;
+
+    uint8_t rom1[ROM1_SIZE]{};
+    uint8_t rom2[ROM2_SIZE]{};
+    uint8_t ram[RAM_SIZE]{};
+    uint8_t sram[SRAM_SIZE]{};
+    uint8_t nvram[NVRAM_SIZE]{};
+    uint8_t cardram[CARDRAM_SIZE]{};
+
+    uint8_t dev_register[0x80]{};
+
+    uint16_t ad_val[4]{};
+    uint8_t ad_nibble = 0;
+    uint8_t sw_pos = 3;
+    uint8_t io_sd = 0;
+
+    submcu_t* sm = nullptr;
+    pcm_t* pcm = nullptr;
+    mcu_timer_t* timer = nullptr;
+    lcd_t* lcd = nullptr;
+
+    uint32_t uart_write_ptr = 0;
+    uint32_t uart_read_ptr = 0;
+    uint8_t uart_buffer[uart_buffer_size]{};
+
+    uint8_t uart_rx_byte = 0;
+    uint64_t uart_rx_delay = 0;
+    uint64_t uart_tx_delay = 0;
+
+    Romset romset = Romset::MK2;
+
+    int is_mk1 = 0; // 0 - SC-55mkII, SC-55ST. 1 - SC-55, CM-300/SCC-1
+    int is_cm300 = 0; // 0 - SC-55, 1 - CM-300/SCC-1
+    int is_st = 0; // 0 - SC-55mk2, 1 - SC-55ST
+    int is_jv880 = 0; // 0 - SC-55, 1 - JV880
+    int is_scb55 = 0; // 0 - sub mcu (e.g SC-55mk2), 1 - no sub mcu (e.g SCB-55)
+    int is_sc155 = 0; // 0 - SC-55(MK2), 1 - SC-155(MK2)
+
+    int rom2_mask = ROM2_SIZE - 1;
+
+    int ga_int[8]{};
+    int ga_int_enable = 0;
+    int ga_int_trigger = 0;
+    int ga_lcd_counter = 0;
+
+    std::atomic<uint32_t> button_pressed;
+
+    uint8_t p0_data = 0;
+    uint8_t p1_data = 0;
+
+    int adf_rd = 0;
+
+    uint64_t analog_end_time = 0;
+
+    int ssr_rd = 0;
+
+    uint32_t operand_type = 0;
+    uint16_t operand_ea = 0;
+    uint8_t operand_ep = 0;
+    uint8_t operand_size = 0;
+    uint8_t operand_reg = 0;
+    uint8_t operand_status = 0;
+    uint16_t operand_data = 0;
+    uint8_t opcode_extended = 0;
+
+    void* callback_userdata = nullptr;
+    mcu_sample_callback sample_callback = MCU_DefaultSampleCallback;
+
+    std::mutex work_thread_lock;
+};
+
+bool MCU_Init(mcu_t& mcu, submcu_t& sm, pcm_t& pcm, mcu_timer_t& timer, lcd_t& lcd);
+void MCU_Reset(mcu_t& mcu);
+void MCU_PatchROM(mcu_t& mcu);
+void MCU_Step(mcu_t& mcu);
+
+void MCU_ErrorTrap(mcu_t& mcu);
+
+uint8_t MCU_Read(mcu_t& mcu, uint32_t address);
+uint16_t MCU_Read16(mcu_t& mcu, uint32_t address);
+uint32_t MCU_Read32(mcu_t& mcu, uint32_t address);
+void MCU_Write(mcu_t& mcu, uint32_t address, uint8_t value);
+void MCU_Write16(mcu_t& mcu, uint32_t address, uint16_t value);
 
 inline uint32_t MCU_GetAddress(uint8_t page, uint16_t address) {
-    return (page << 16) + address;
+    return ((uint32_t)page << 16) + address;
 }
 
-inline uint8_t MCU_ReadCode(void) {
-    return MCU_Read(MCU_GetAddress(mcu.cp, mcu.pc));
+inline uint8_t MCU_ReadCode(mcu_t& mcu) {
+    return MCU_Read(mcu, MCU_GetAddress(mcu.cp, mcu.pc));
 }
 
-inline uint8_t MCU_ReadCodeAdvance(void) {
-    uint8_t ret = MCU_ReadCode();
+inline uint8_t MCU_ReadCodeAdvance(mcu_t& mcu) {
+    uint8_t ret = MCU_ReadCode(mcu);
     mcu.pc++;
     return ret;
 }
 
-inline void MCU_SetRegisterByte(uint8_t reg, uint8_t val)
+inline void MCU_SetRegisterByte(mcu_t& mcu, uint8_t reg, uint8_t val)
 {
     mcu.r[reg] = val;
 }
 
-inline uint32_t MCU_GetVectorAddress(uint32_t vector)
+inline uint32_t MCU_GetVectorAddress(mcu_t& mcu, uint32_t vector)
 {
-    return MCU_Read32(vector * 4);
+    return MCU_Read32(mcu, vector * 4);
 }
 
-inline uint32_t MCU_GetPageForRegister(uint32_t reg)
+inline uint32_t MCU_GetPageForRegister(mcu_t& mcu, uint32_t reg)
 {
     if (reg >= 6)
         return mcu.tp;
@@ -231,30 +336,30 @@ inline uint32_t MCU_GetPageForRegister(uint32_t reg)
     return mcu.dp;
 }
 
-inline void MCU_ControlRegisterWrite(uint32_t reg, uint32_t siz, uint32_t data)
+inline void MCU_ControlRegisterWrite(mcu_t& mcu, uint32_t reg, uint32_t siz, uint32_t data)
 {
     if (siz)
     {
         if (reg == 0)
         {
-            mcu.sr = data;
+            mcu.sr = (uint16_t)data;
             mcu.sr &= sr_mask;
         }
         else if (reg == 5) // FIXME: undocumented
         {
-            mcu.dp = data & 0xff;
+            mcu.dp = (uint8_t)(data & 0xff);
         }
         else if (reg == 4) // FIXME: undocumented
         {
-            mcu.ep = data & 0xff;
+            mcu.ep = (uint8_t)(data & 0xff);
         }
         else if (reg == 3) // FIXME: undocumented
         {
-            mcu.br = data & 0xff;
+            mcu.br = (uint8_t)(data & 0xff);
         }
         else
         {
-            MCU_ErrorTrap();
+            MCU_ErrorTrap(mcu);
         }
     }
     else
@@ -267,28 +372,28 @@ inline void MCU_ControlRegisterWrite(uint32_t reg, uint32_t siz, uint32_t data)
         }
         else if (reg == 3)
         {
-            mcu.br = data;
+            mcu.br = (uint8_t)data;
         }
         else if (reg == 4)
         {
-            mcu.ep = data;
+            mcu.ep = (uint8_t)data;
         }
         else if (reg == 5)
         {
-            mcu.dp = data;
+            mcu.dp = (uint8_t)data;
         }
         else if (reg == 7)
         {
-            mcu.tp = data;
+            mcu.tp = (uint8_t)data;
         }
         else
         {
-            MCU_ErrorTrap();
+            MCU_ErrorTrap(mcu);
         }
     }
 }
 
-inline uint32_t MCU_ControlRegisterRead(uint32_t reg, uint32_t siz)
+inline uint32_t MCU_ControlRegisterRead(mcu_t& mcu, uint32_t reg, uint32_t siz)
 {
     uint32_t ret = 0;
     if (siz)
@@ -299,19 +404,19 @@ inline uint32_t MCU_ControlRegisterRead(uint32_t reg, uint32_t siz)
         }
         else if (reg == 5) // FIXME: undocumented
         {
-            ret = mcu.dp | (mcu.dp << 8);
+            ret = (uint32_t)mcu.dp | ((uint32_t)mcu.dp << 8);
         }
         else if (reg == 4) // FIXME: undocumented
         {
-            ret = mcu.ep | (mcu.ep << 8);
+            ret = (uint32_t)mcu.ep | ((uint32_t)mcu.ep << 8);
         }
         else if (reg == 3) // FIXME: undocumented
         {
-            ret = mcu.br | (mcu.br << 8);;
+            ret = (uint32_t)mcu.br | ((uint32_t)mcu.br << 8);;
         }
         else
         {
-            MCU_ErrorTrap();
+            MCU_ErrorTrap(mcu);
         }
         ret &= 0xffff;
     }
@@ -339,35 +444,35 @@ inline uint32_t MCU_ControlRegisterRead(uint32_t reg, uint32_t siz)
         }
         else
         {
-            MCU_ErrorTrap();
+            MCU_ErrorTrap(mcu);
         }
         ret &= 0xff;
     }
     return ret;
 }
 
-inline void MCU_SetStatus(uint32_t condition, uint32_t mask)
+inline void MCU_SetStatus(mcu_t& mcu, uint32_t condition, uint32_t mask)
 {
     if (condition)
-        mcu.sr |= mask;
+        mcu.sr |= (uint16_t)mask;
     else
-        mcu.sr &= ~mask;
+        mcu.sr &= (uint16_t)(~mask);
 }
 
-inline void MCU_PushStack(uint16_t data)
+inline void MCU_PushStack(mcu_t& mcu, uint16_t data)
 {
     if (mcu.r[7] & 1)
-        MCU_Interrupt_Exception(EXCEPTION_SOURCE_ADDRESS_ERROR);
+        MCU_Interrupt_Exception(mcu, EXCEPTION_SOURCE_ADDRESS_ERROR);
     mcu.r[7] -= 2;
-    MCU_Write16(mcu.r[7], data);
+    MCU_Write16(mcu, mcu.r[7], data);
 }
 
-inline uint16_t MCU_PopStack(void)
+inline uint16_t MCU_PopStack(mcu_t& mcu)
 {
     uint16_t ret;
     if (mcu.r[7] & 1)
-        MCU_Interrupt_Exception(EXCEPTION_SOURCE_ADDRESS_ERROR);
-    ret = MCU_Read16(mcu.r[7]);
+        MCU_Interrupt_Exception(mcu, EXCEPTION_SOURCE_ADDRESS_ERROR);
+    ret = MCU_Read16(mcu, mcu.r[7]);
     mcu.r[7] += 2;
     return ret;
 }
@@ -429,47 +534,17 @@ enum {
 };
 
 
-enum {
-    ROM_SET_MK2 = 0,
-    ROM_SET_ST,
-    ROM_SET_MK1,
-    ROM_SET_CM300,
-    ROM_SET_JV880,
-    ROM_SET_SCB55,
-    ROM_SET_RLP3237,
-    ROM_SET_SC155,
-    ROM_SET_SC155MK2,
-    ROM_SET_COUNT
-};
+uint8_t MCU_ReadP0(mcu_t& mcu);
+uint8_t MCU_ReadP1(mcu_t& mcu);
+void MCU_WriteP0(mcu_t& mcu, uint8_t data);
+void MCU_WriteP1(mcu_t& mcu, uint8_t data);
+void MCU_GA_SetGAInt(mcu_t& mcu, int line, int value);
 
-extern const char* rs_name[ROM_SET_COUNT];
+void MCU_EncoderTrigger(mcu_t& mcu, int dir);
 
-extern int romset;
+void MCU_PostSample(mcu_t& mcu, const AudioFrame<int32_t>& frame);
+void MCU_PostUART(mcu_t& mcu, uint8_t data);
 
-extern int mcu_mk1;
-extern int mcu_cm300;
-extern int mcu_st;
-extern int mcu_jv880;
-extern int mcu_scb55;
-extern int mcu_sc155;
+void MCU_WorkThread_Lock(mcu_t& mcu);
+void MCU_WorkThread_Unlock(mcu_t& mcu);
 
-extern SDL_atomic_t mcu_button_pressed;
-
-static const uint32_t uart_buffer_size = 8192;
-extern uint32_t uart_write_ptr;
-extern uint32_t uart_read_ptr;
-extern uint8_t uart_buffer[uart_buffer_size];
-
-uint8_t MCU_ReadP0(void);
-uint8_t MCU_ReadP1(void);
-void MCU_WriteP0(uint8_t data);
-void MCU_WriteP1(uint8_t data);
-void MCU_GA_SetGAInt(int line, int value);
-
-void MCU_EncoderTrigger(int dir);
-
-void MCU_PostSample(int *sample);
-void MCU_PostUART(uint8_t data);
-
-void MCU_WorkThread_Lock(void);
-void MCU_WorkThread_Unlock(void);

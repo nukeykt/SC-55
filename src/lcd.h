@@ -33,20 +33,53 @@
  */
 #pragma once
 
-#include <stdint.h>
-#include <string>
+#include <cstdint>
+#include <filesystem>
 
-extern int lcd_width;
-extern int lcd_height;
+struct mcu_t;
 
-extern uint32_t lcd_col1;
-extern uint32_t lcd_col2;
+struct SDL_Window;
+struct SDL_Renderer;
+struct SDL_Texture;
+union SDL_Event;
 
-void LCD_SetBackPath(const std::string &path);
-void LCD_Init(void);
-void LCD_UnInit(void);
-void LCD_Write(uint32_t address, uint8_t data);
-void LCD_Enable(uint32_t enable);
-bool LCD_QuitRequested();
+static const int lcd_width_max = 1024;
+static const int lcd_height_max = 1024;
+
+struct lcd_t {
+    mcu_t* mcu = nullptr;
+
+    size_t width = 0;
+    size_t height = 0;
+
+    uint32_t color1 = 0;
+    uint32_t color2 = 0;
+
+    uint32_t LCD_DL = 0, LCD_N = 0, LCD_F = 0, LCD_D = 0, LCD_C = 0, LCD_B = 0, LCD_ID = 0, LCD_S = 0;
+    uint32_t LCD_DD_RAM = 0, LCD_AC = 0, LCD_CG_RAM = 0;
+    uint32_t LCD_RAM_MODE = 0;
+    uint8_t LCD_Data[80]{};
+    uint8_t LCD_CG[64]{};
+
+    uint8_t enable = 0;
+    bool quit_requested = false;
+
+    uint32_t buffer[lcd_height_max][lcd_width_max]{};
+    uint32_t background[268][741]{};
+
+    SDL_Window *window = nullptr;
+    SDL_Renderer *renderer = nullptr;
+    SDL_Texture *texture = nullptr;
+};
+
+
+void LCD_LoadBack(lcd_t& lcd, const std::filesystem::path& path);
+void LCD_Init(lcd_t& lcd, mcu_t& mcu);
+bool LCD_CreateWindow(lcd_t& lcd);
+void LCD_UnInit(lcd_t& lcd);
+void LCD_Write(lcd_t& lcd, uint32_t address, uint8_t data);
+void LCD_Enable(lcd_t& lcd, uint32_t enable);
+bool LCD_QuitRequested(lcd_t& lcd);
 void LCD_Sync(void);
-void LCD_Update(void);
+void LCD_Update(lcd_t& lcd);
+void LCD_HandleEvent(lcd_t& lcd, const SDL_Event& sdl_event);

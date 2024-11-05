@@ -33,12 +33,14 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
-void MCU_Interrupt_SetRequest(uint32_t interrupt, uint32_t value);
-void MCU_Interrupt_Exception(uint32_t exception);
-void MCU_Interrupt_TRAPA(uint32_t vector);
-void MCU_Interrupt_Handle(void);
+struct mcu_t;
+
+void MCU_Interrupt_SetRequest(mcu_t& mcu, uint32_t interrupt, uint32_t value);
+void MCU_Interrupt_Exception(mcu_t& mcu, uint32_t exception);
+void MCU_Interrupt_TRAPA(mcu_t& mcu, uint32_t vector);
+void MCU_Interrupt_Handle(mcu_t& mcu);
 
 enum {
     INTERRUPT_SOURCE_NMI = 0,

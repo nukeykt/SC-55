@@ -1,0 +1,129 @@
+===========================================================================
+Title                   : Alien Vendetta MIDI Pack
+Filename                : AVmidi.wad
+Release date            : January 1st, 2022
+Author                  : Cammy et al.
+Email Address           : [redacted]
+Other Files By Author   : Project lead of the TNT: Evilution MIDI Pack,
+                          composer for Realm of Chaos 25th Anniversary
+                          Edition, contributor to .MID the Way id Did,
+                          the Ultimate MIDI Pack, and the No Rest for the
+                          Living MIDI Pack. Counting my brilliant
+			  co-contributors, an incalculable amount of work!
+Misc. Author Info       : I'm a survivor. We're a dying breed.
+
+Description             : Happy twentieth birthday to what may yet be the
+                          most famous and influential megawad which our
+                          community has ever produced - certainly so at
+                          the time it came out, that's for sure!
+
+                          With the permission of AV's original project
+                          lead, Anders Johnsen, my collaborators and I
+                          have worked to give Alien Vendetta the full
+                          score treatment which it always deserved. I'm
+                          blown away by the excellent work they've put
+                          into this pack and hope that you will enjoy
+                          it as much as we enjoyed making it!
+						  
+Additional Credits to   : Jimmy for the inspiration and template;
+                          Anders Johnsen, Brad Spencer, Lee Szymanski, and
+                          Chris Laverdure for their guidance and grace;
+                          every composer involved for their superb work
+                          
+
+===========================================================================
+* What is included *
+
+New levels              : No
+Sounds                  : No
+Music                   : Yes
+Graphics                : No
+Dehacked/BEX Patch      : No
+Demos                   : No
+Other                   : AVmidi-np.wad, which can be run with ZDoom to
+			  display the names of the tracks and their
+			  authors on map start.
+			  A file folder which contains every raw MIDI.
+Other files required    : No
+
+
+* Play Information *
+
+Game                    : Doom II (intended to be played alongside AV.wad)
+Single Player           : N/A
+Cooperative 2-4 Player  : N/A
+Deathmatch 2-4 Player   : N/A
+Other game styles       : N/A
+Difficulty Settings     : N/A
+
+* Construction *
+
+Base                    : New from scratch
+Build Time              : ~4 months
+Editor(s) used          : Sekaiju, GuitarTux, FL Studio, GarageBand, etc.
+May Not Run With...     : DOS machines, on which certain MIDIs do not
+			  play. Still compatible with all major source
+			  ports though, including vanilla ones.
+
+
+* Copyright / Permissions *
+
+Authors MAY use the contents of this file as a base for modification or
+reuse.  Permissions have been obtained from original authors for any of
+their resources modified or included in this file.
+
+You MAY distribute this file, provided you include this text file, with no
+modifications.  You may distribute this file in any electronic format (BBS,
+Diskette, CD, etc) as long as you include this file intact.  I have
+received permission from the original authors of any modified or included
+content in this file to allow further distribution.
+
+* Where to get the file that this text file describes *
+
+The Usual: ftp://archives.3dgamers.com/pub/idgames/ and mirrors
+Web sites: http://www.doomworld.com/idgames
+
+===========================================================================
+
+* Track list *
+
+  TITLE: "Whispers of War" by Lee Jackson
+  INTER: "Xenotime" by Joshua "Dragonfly" O'Sullivan and Cammy
+  STORY: "Ad Vitam" by Bucket
+
+  MAP01: "Sun Rider" by SynDoom
+  MAP02: "Journey Through the Unknown" by Edwin van Veldhoven
+  MAP03: "The Berggren-Malde Complex" by Ivan "northivanastan" Stanton and DCG Retrowave
+  MAP04: "Shotgun Shawarma" by Rogue Akai & Sumo
+  MAP05: "And Into the Forest I Go, to Lose My Mind and Find My Soul" by Joshua "Dragonfly" O'Sullivan
+  MAP06: "Shoot the Pianist" by stewboy
+  MAP07: "Dustbowl" by SynDoom
+  MAP08: "Hail the Severed Head" by Lippeth
+  MAP09: "Treachery of the Fallen" by Chris Laverdure
+  MAP10: "Guardian Angel Loses Their Will" by Emma Essex
+  MAP11: "Adversary" by Bucket
+  MAP12: "Edge" by Jeremy Doyle
+  MAP13: "Tireless" by glowyisconfused
+  MAP14: "Slim Chances" by Sego
+  MAP15: "Pinkies on Parade" by JD Herrera
+  MAP16: "Speed of Tech" by Myrgharok / TheUltimateDoomer666
+  MAP17: "The Anthrax Solution" by Varis Alpha
+  MAP18: "Lunar Outbreak" by Deadwing
+  MAP19: "Prelude to Misri in B Minor" by Jimmy
+  MAP20: "Fight The Logic If You Can" by Chris Laverdure
+  MAP21: "The Caco's Best" by Peter "MegaSphere" Lawrence
+  MAP22: "Short Notice (Red Niflheim Mix)" by TrialD and Cammy
+  MAP23: "Guess We Are Fighting Cyberdemons"  by Peter "MegaSphere" Lawrence
+  MAP24: "Arcadia" by Velvetic
+  MAP25: "You Really Suck" by Lee Jackson
+  BONUS: "Chicago Typography" by Cammy (for use with MAP25: Valley of Echoes)
+  MAP26: "Bipolar Boogie" by Xulgonoth and Cammy
+  MAP27: "Of Serpents Nailed to Fate" by Cammy
+  MAP28: "Shhh, the Shadows are Near" by decino
+  MAP29: "We Are All Waiting" by Psychedelic Eyeball
+  MAP30: "Ave Atque Vale" by Bucket
+  MAP31: "Kaleidoscopic Array" by Mr. Freeze and Cammy
+  MAP32: "Eternal Damnation" by Knightrider of Doom
+
+===========================================================================
+
