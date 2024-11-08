@@ -276,9 +276,6 @@ void LCD_Init(lcd_t& lcd, mcu_t& mcu)
 
 bool LCD_CreateWindow(lcd_t& lcd)
 {
-    SDL_Surface *background_image = nullptr;
-    background_image = SDL_LoadBMP("sc55mkII_background.bmp");
-
     size_t screen_width = 0;
     size_t screen_height = 0;
 
@@ -290,17 +287,6 @@ bool LCD_CreateWindow(lcd_t& lcd)
         screen_height = lcd.height;
         lcd.color1 = 0x000000;
         lcd.color2 = 0x78b500;
-    }
-    else if(lcd.mcu->romset == Romset::MK2 && background_image)
-    {
-        
-        lcd.width = 741;
-        lcd.height = 268;
-        screen_width = 1120;
-        screen_height = 233;
-        lcd.color1 = 0x000000;
-        lcd.color2 = 0x0050c8;
-        lcd.background_enabled = 1;
     }
     else
     {
@@ -315,6 +301,19 @@ bool LCD_CreateWindow(lcd_t& lcd)
     std::string title = "Nuked SC-55: ";
 
     title += EMU_RomsetName(lcd.mcu->romset);
+
+    SDL_Surface *background_image = nullptr;
+
+    if(lcd.mcu->romset == Romset::MK2)
+    {
+        background_image = SDL_LoadBMP("sc55mkII_background.bmp");
+        if(background_image)
+        {
+            lcd.background_enabled = 1;
+            screen_width = 1120;
+            screen_height = 233;
+        }
+    }
 
     lcd.window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_SHOWN);
     if (!lcd.window)
@@ -741,7 +740,7 @@ void LCD_HandleEvent(lcd_t& lcd, const SDL_Event& sdl_event)
                 }
                 if (lcd.volume != 0.0f) {
                     float vol = powf(10.0f, (-80.0f * (1.0f - lcd.volume)) / 20.0f); // or volume ^ 8 (0 < volume < 1)
-                    MCU_SetVolume(*lcd.mcu, (uint16_t) (vol * 2 *UINT16_MAX));
+                    MCU_SetVolume(*lcd.mcu, (uint16_t) (vol *UINT16_MAX));
                 } else {
                     MCU_SetVolume(*lcd.mcu, 0);
                 }
@@ -765,7 +764,7 @@ void LCD_HandleEvent(lcd_t& lcd, const SDL_Event& sdl_event)
                 }
                 if (lcd.volume != 0.0f) {
                     float vol = powf(10.0f, (-80.0f * (1.0f - lcd.volume)) / 20.0f); // or volume ^ 8 (0 < volume < 1)
-                    MCU_SetVolume(*lcd.mcu, (uint16_t) (vol * 2 * UINT16_MAX));
+                    MCU_SetVolume(*lcd.mcu, (uint16_t) (vol * UINT16_MAX));
                 } else {
                     MCU_SetVolume(*lcd.mcu, 0);
                 }

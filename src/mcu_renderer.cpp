@@ -31,7 +31,6 @@
  *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  */
-#include "SDL.h"
 #include "mcu.h"
 #include "mcu_timer.h"
 #include "mcu_opcodes.h"
@@ -877,53 +876,6 @@ void MCU_UpdateUART_TX(mcu_t& mcu)
     // fprintf(stderr, "tx:%x\n", mcu.dev_register[DEV_TDR]);
 }
 
-void MCU_UpdateUART(mcu_t& mcu)
-{
-    if(mcu.uart_tx_ptr == mcu.uart_tx_buffer)
-        return;
-    
-    uint8_t *tx_buffer = mcu.uart_tx_buffer;
-
-    if (mcu.uart_tx_ptr == tx_buffer)
-        return;
-
-    int len;
-    uint8_t status = *tx_buffer;
-    if (status == 0xF0) {
-        if (*(mcu.uart_tx_ptr - 1) == 0xF7) 
-        {
-            len = mcu.uart_tx_ptr - tx_buffer;
-            MIDI_PostSysExMessage(tx_buffer, len);
-            mcu.uart_tx_ptr = mcu.uart_tx_buffer;
-        }
-    } 
-    else 
-    {
-        switch (status & 0xF0) {
-            case 0x80: // Note off
-            case 0x90: // Note on
-            case 0xA0: // Polyphonic pressure
-            case 0xB0: // Control change
-            case 0xE0: // Pitch bend
-                len = 3;
-                break;
-            case 0xC0: // Program change
-            case 0xD0: // Channel pressure
-                len = 2;
-                break;
-            default:
-                printf("Unknown status byte 0x%02X\n", status);
-                mcu.uart_tx_ptr = mcu.uart_tx_buffer;
-                return;
-        }
-        if (mcu.uart_tx_ptr - tx_buffer >= len) 
-        {
-            MIDI_PostShortMessage(tx_buffer, len);
-            mcu.uart_tx_ptr = mcu.uart_tx_buffer;
-        }
-    }
-}
-
 void MCU_WorkThread_Lock(mcu_t& mcu)
 {
     mcu.work_thread_lock.lock();
@@ -961,7 +913,6 @@ void MCU_Step(mcu_t& mcu)
         MCU_UpdateUART_TX(mcu);
     }
 
-    MCU_UpdateUART(mcu);
     MCU_UpdateAnalog(mcu, mcu.cycles);
 
     if (mcu.is_mk1)

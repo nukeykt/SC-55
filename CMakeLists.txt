@@ -118,6 +118,23 @@ if(APPLE)
 endif()
 
 #==============================================================================
+# Renderer Frontend
+#==============================================================================
+add_executable(nuked-sc55-render)
+target_sources(nuked-sc55-render
+    PRIVATE
+    src/mcu_renderer.cpp
+    src/render_frontend.cpp
+    src/smf.cpp src/smf.h
+    src/wav.cpp src/wav.h
+)
+
+target_link_libraries(nuked-sc55-render PRIVATE nuked-sc55-backend)
+target_compile_features(nuked-sc55-render PRIVATE cxx_std_23)
+target_enable_warnings(nuked-sc55-render)
+target_enable_conversion_warnings(nuked-sc55-render)
+
+#==============================================================================
 # Installables
 #==============================================================================
 include(GNUInstallDirs)
