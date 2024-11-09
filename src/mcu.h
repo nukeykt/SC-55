@@ -174,6 +174,12 @@ enum {
     VECTOR_INTERNAL_INTERRUPT_E0, // ADI
 };
 
+enum COMPUTER_SWITCH {
+    RS422 = 0,
+    RS232C_1 = 1,
+    RS232C_2 = 2,
+    MIDI = 3
+};
 
 struct mcu_t {
     uint16_t r[8];

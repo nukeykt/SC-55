@@ -35,9 +35,16 @@
 
 #include <stdint.h>
 
-int MIDI_Init(int inport, int outport);
-void MIDI_Quit(void);
-int MIDI_GetMidiInDevices(char* devices);
-int MIDI_GetMidiOutDevices(char* devices);
-void MIDI_PostShortMessge(uint8_t *message, int len);
-void MIDI_PostSysExMessge(uint8_t *message, int len);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int SERIAL_Init(const char* path);
+void SERIAL_Update(uint64_t cycles);
+int SERIAL_HasData();
+uint8_t SERIAL_ReadUART();
+void SERIAL_PostUART(uint8_t data);
+
+#ifdef __cplusplus
+}
+#endif

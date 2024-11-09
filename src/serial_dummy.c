@@ -31,13 +31,20 @@
  *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  */
-#pragma once
+#include "serial.h"
 
-#include <stdint.h>
+int SERIAL_Init(const char* path) {
+    return 1;
+}
+void SERIAL_Update(uint64_t cycles) {
 
-int MIDI_Init(int inport, int outport);
-void MIDI_Quit(void);
-int MIDI_GetMidiInDevices(char* devices);
-int MIDI_GetMidiOutDevices(char* devices);
-void MIDI_PostShortMessge(uint8_t *message, int len);
-void MIDI_PostSysExMessge(uint8_t *message, int len);
+}
+int SERIAL_HasData() {
+    return 0;
+}
+uint8_t SERIAL_ReadUART() {
+    return 0;
+}
+void SERIAL_PostUART(uint8_t data) {
+    
+}

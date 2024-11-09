@@ -54,8 +54,8 @@ static uint8_t LCD_CG[64];
 static uint8_t lcd_enable = 0;
 static uint8_t lcd_button_enable = 0;
 static bool lcd_quit_requested = false;
-static float volume = 0.775f; // default volume (-18dB)
-static uint8_t lcd_contrast = 8;
+static float volume = 0.8f; // default volume (-16dB)
+static uint8_t lcd_contrast = 0;
 
 void LCD_Enable(uint32_t enable)
 {
@@ -68,11 +68,17 @@ void LCD_ButtonEnable(uint8_t state)
 }
 
 void LCD_SetContrast(uint8_t contrast) {
-    if (contrast > 16)
-        contrast = 16;
-    if (contrast < 1)
-        contrast = 1;
-    lcd_contrast = contrast;
+    if (mcu_jv880) {
+        if (contrast > 10)
+            contrast = 10;
+        lcd_contrast = contrast;
+    } else {
+        if (contrast > 16)
+            contrast = 16;
+        if (contrast < 1)
+            contrast = 1;
+        lcd_contrast = contrast;
+    }
 }
 
 bool LCD_QuitRequested()
@@ -544,7 +550,7 @@ void LCD_Update(void)
                     memset(LCD_Data, ' ', sizeof(LCD_Data));
                     for (size_t i = 0; i < lcd_height; i++) {
                         for (size_t j = 0; j < lcd_width; j++) {
-                            lcd_buffer[i][j] = (lcd_background[i][j] & 0xF0F000) >> 2;
+                            lcd_buffer[i][j] = (lcd_background[i][j] & 0xFCFC0C) >> 2;
                         }
                     }
                 }
@@ -568,6 +574,7 @@ void LCD_Update(void)
                     for (int j = 0; j < 24; j++)
                     {
                         uint8_t ch = LCD_Data[i * 40 + j];
+                        LCD_FontRenderStandard(10 + i * 50, 4 + j * 34, ' ');
                         LCD_FontRenderStandard(4 + i * 50, 4 + j * 34, ch);
                     }
                 }
@@ -576,7 +583,7 @@ void LCD_Update(void)
                 int j = LCD_DD_RAM % 0x40;
                 int i = LCD_DD_RAM / 0x40;
                 if (i < 2 && j < 24 && LCD_C)
-                    LCD_FontRenderStandard(4 + i * 50, 4 + j * 34, '_', true);
+                    LCD_FontRenderStandard(10 + i * 50, 4 + j * 34, '_', true);
             }
             else
             {
@@ -752,7 +759,7 @@ void LCD_Update(void)
                     if (relval < -50) {
                         relval = -50;
                     }
-                    volume += relval / (volume > 0.775f ? 10000.0f : 400.0f); // Prevent someone make sound too loud (like me)
+                    volume += relval / (volume > 0.8f ? 10000.0f : 400.0f); // Prevent someone make sound too loud (like me)
                     if (volume > 1.0f) {
                         volume = 1.0f;
                     }

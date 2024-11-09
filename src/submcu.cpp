@@ -36,6 +36,7 @@
 #include "SDL_audio.h"
 #include "mcu.h"
 #include "submcu.h"
+#include "serial.h"
 
 enum {
     SM_VECTOR_UART3_TX = 0,
@@ -54,11 +55,13 @@ enum {
     SM_DEV_P1_DATA = 0x00,
     SM_DEV_P1_DIR = 0x01,
     SM_DEV_RAM_DIR = 0x02,
+    SM_DEV_UART1_DATA = 0x04,
     SM_DEV_UART1_MODE_STATUS = 0x05,
     SM_DEV_UART1_CTRL = 0x06,
     SM_DEV_UART2_DATA = 0x08,
     SM_DEV_UART2_MODE_STATUS = 0x09,
     SM_DEV_UART2_CTRL = 0x0a,
+    SM_DEV_UART3_DATA = 0x0c,
     SM_DEV_UART3_MODE_STATUS = 0x0d,
     SM_DEV_UART3_CTRL = 0x0e,
     SM_DEV_IPCM0 = 0x10,
@@ -98,6 +101,9 @@ submcu_t sm;
 static uint8_t uart_rx_gotbyte;
 static uint8_t uart_rx_byte;
 static uint64_t uart_rx_delay;
+static uint8_t uart_serial_rx_gotbyte;
+static uint8_t uart_serial_rx_byte;
+static uint64_t uart_serial_rx_delay;
 
 void SM_ErrorTrap(void)
 {
@@ -124,16 +130,21 @@ uint8_t SM_Read(uint16_t address)
         address &= 0x1f;
         switch (address)
         {
-            case SM_DEV_UART2_DATA:
+            case SM_DEV_UART1_DATA: // Serial In
             {
-                uart_rx_gotbyte = 0;
-                return uart_rx_byte;
+                uart_serial_rx_gotbyte = 0;
+                return uart_serial_rx_byte;
             }
             case SM_DEV_UART1_MODE_STATUS:
             {
-                uint8_t ret = 0;
+                uint8_t ret = uart_serial_rx_gotbyte << 1;
                 ret |= 5;
                 return ret;
+            }
+            case SM_DEV_UART2_DATA: // Midi In
+            {
+                uart_rx_gotbyte = 0;
+                return uart_rx_byte;
             }
             case SM_DEV_UART2_MODE_STATUS:
             {
@@ -184,6 +195,9 @@ void SM_Write(uint16_t address, uint8_t data)
         address &= 0x1f;
         switch (address)
         {
+            case SM_DEV_UART1_DATA: // Serial Out
+                SERIAL_PostUART(data);
+                break;
             case SM_DEV_UART2_DATA: // MIDI Out
                 if (uart_tx_ptr - uart_tx_buffer >= uart_buffer_size)   {
                     printf("MIDI TX OVERFLOW\n");
@@ -198,6 +212,8 @@ void SM_Write(uint16_t address, uint8_t data)
 
                 *uart_tx_ptr++ = data;
                 // printf("tx: %02x ptr: %04x\n", data, uart_tx_ptr - uart_tx_buffer);
+                break;
+            case SM_DEV_UART3_DATA:
                 break;
             case SM_DEV_P1_DATA:
                 MCU_WriteP1(data);
@@ -1436,6 +1452,26 @@ void SM_UpdateUART(void)
     uart_rx_delay = sm.cycles + 3000 * 4;
 }
 
+void SM_UpdateSerial(void)
+{
+    if ((sm_device_mode[SM_DEV_UART1_CTRL] & 4) == 0) // RX disabled
+        return;
+    if (!SERIAL_HasData()) // no byte
+        return;
+
+    if (uart_serial_rx_gotbyte)
+        return;
+
+    if (sm.cycles < uart_serial_rx_delay)
+        return;
+
+    uart_serial_rx_byte = SERIAL_ReadUART();
+    uart_serial_rx_gotbyte = 1;
+    sm_device_mode[SM_DEV_INT_REQUEST] |= 0x80;
+
+    uart_serial_rx_delay = sm.cycles + 3000 * 4;
+}
+
 void SM_Update(uint64_t cycles)
 {
     while (sm.cycles < cycles * 5)
@@ -1452,6 +1488,8 @@ void SM_Update(uint64_t cycles)
         sm.cycles += 12 * 4; // FIXME
         
         SM_UpdateTimer();
+        SM_UpdateSerial();
         SM_UpdateUART();
+        SERIAL_Update(sm.cycles);
     }
 }

@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.2...3.5)
-project (NukedSC55 VERSION 0.2.0 LANGUAGES CXX)
+project (NukedSC55 VERSION 0.2.0 LANGUAGES C CXX)
 
 include(FindPkgConfig)
 include(GNUInstallDirs)
@@ -10,6 +10,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Prefer C++11 standard
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_C_STANDARD 11)
 
 if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -194,6 +195,7 @@ set(SC55_SRC
     src/mcu_opcodes.cpp src/mcu_opcodes.h
     src/mcu_timer.cpp src/mcu_timer.h
     src/midi.h
+    src/serial.h
     src/pcm.cpp src/pcm.h
     src/submcu.cpp src/submcu.h
 
@@ -204,6 +206,12 @@ if(USE_RTMIDI)
     list(APPEND SC55_SRC src/midi_rtmidi.cpp)
 elseif(WIN32)
     list(APPEND SC55_SRC src/midi_win32.cpp)
+endif()
+
+if(WIN32)
+    list(APPEND SC55_SRC src/serial_win32.c)
+else()
+    list(APPEND SC55_SRC src/serial_dummy.c)
 endif()
 
 add_executable(nuked-sc55 ${SC55_SRC} ${UTF8MAIN_SRCS})

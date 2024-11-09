@@ -45,6 +45,7 @@
 #include "midi.h"
 #include "utf8main.h"
 #include "utils/files.h"
+#include "serial.h"
 
 #if __linux__
 #include <unistd.h>
@@ -149,7 +150,7 @@ static short *sample_buffer;
 static int sample_read_ptr;
 static int sample_write_ptr;
 
-static uint16_t volume = 8250; // default volume (-18dB)
+static uint16_t volume = 10386; // default volume (-16dB)
 
 static SDL_AudioDeviceID sdl_audio;
 
@@ -175,7 +176,7 @@ uint8_t dev_register[0x80];
 
 static uint16_t ad_val[4];
 static uint8_t ad_nibble = 0x00;
-static uint8_t sw_pos = 3;
+static COMPUTER_SWITCH computer_switch = MIDI;
 static uint8_t io_sd = 0x00;
 
 SDL_atomic_t mcu_button_pressed = { 0 };
@@ -262,18 +263,18 @@ READ_RCU:
                 if (mcu_sc155)
                     return MCU_SC155Sliders(8);
                 return 0;
-            case 2: // SW
-                switch (sw_pos)
+            case 2: // Computer switch
+                switch (computer_switch)
                 {
-                case 0:
+                case RS422:
+                    return ANALOG_LEVEL_SW_0; // Mac (RS422)
+                case RS232C_1:
+                    return ANALOG_LEVEL_SW_1; // PC-1 (RS232C-1)
+                case RS232C_2:
+                    return ANALOG_LEVEL_SW_2; // PC-2 (RS232C-2)
                 default:
-                    return ANALOG_LEVEL_SW_0;
-                case 1:
-                    return ANALOG_LEVEL_SW_1;
-                case 2:
-                    return ANALOG_LEVEL_SW_2;
-                case 3:
-                    return ANALOG_LEVEL_SW_3;
+                case MIDI:
+                    return ANALOG_LEVEL_SW_3; // MIDI
                 }
             case 3: // RCU
                 goto READ_RCU;
@@ -362,7 +363,11 @@ void MCU_DeviceWrite(uint32_t address, uint8_t data)
     case DEV_IPRD:
         break;
     case DEV_PWM1_DTR:
-        LCD_SetContrast(16 - (data >> 4));
+        if (mcu_jv880) {
+            LCD_SetContrast(10 - (data / 11));
+        } else {
+            LCD_SetContrast(16 - (data >> 4));
+        }
         break;
     case DEV_PWM1_TCR:
         break;
@@ -1118,7 +1123,7 @@ int SDLCALL work_thread(void* data)
         mcu.cycles += 12; // FIXME: assume 12 cycles per instruction
 
         // if (mcu.cycles % 24000000 == 0)
-        //     printf("seconds: %i\n", (int)(mcu.cycles / 24000000));
+        //     printf("seconds: %i pc: %04x\n", (int)(mcu.cycles / 24000000), mcu.pc);
 
         PCM_Update(mcu.cycles);
 
@@ -1490,7 +1495,7 @@ int main(int argc, char *argv[])
     int pageNum = 32;
     bool autodetect = true;
     ResetType resetType = ResetType::NONE;
-    char *inportname = NULL, *outportname = NULL;
+    char *inportname = NULL, *outportname = NULL, *serial = NULL;
 
     romset = ROM_SET_MK2;
 
@@ -1582,26 +1587,40 @@ int main(int argc, char *argv[])
                 // TODO: Might want to try to find a way to print out the executable's actual name (without any full paths).
                 printf("Usage: nuked-sc55 [options]\n");
                 printf("Options:\n");
-                printf("  -h, -help, --help              Display this information.\n");
+                printf("  -h, -help, --help                    Display this information.\n");
                 printf("\n");
-                printf("  -p:<port_number>               Set MIDI input port.\n");
-                printf("  -po:<port_number>              Set MIDI output port.\n");
-                printf("  -pn:<port_name>                Set MIDI input port.\n");
-                printf("  -a:<device_number>             Set Audio Device index.\n");
-                printf("  -ab:<page_size>:[page_count]   Set Audio Buffer size.\n");
-                printf("  -midiin <port_name>            Set MIDI input port.\n");
-                printf("  -midiout <port_name>           Set MIDI output port.\n");
+                printf("  -p:<port_number>                     Set MIDI input port.\n");
+                printf("  -po:<port_number>                    Set MIDI output port.\n");
+                printf("  -pn:<port_name>                      Set MIDI input port.\n");
+                printf("  -a:<device_number>                   Set Audio Device index.\n");
+                printf("  -ab:<page_size>:[page_count]         Set Audio Buffer size.\n");
+                printf("  -midiin <port_name>                  Set MIDI input port.\n");
+                printf("  -midiout <port_name>                 Set MIDI output port.\n");
+#ifdef WIN32
+#define SERIAL_ENABLED
+                printf("  -serial <serial_port/named_pipe>     Set serial port.\n");
+#endif
+#if 0
+#ifdef __unix__
+#define SERIAL_ENABLED
+                printf("  -serial <file/unix_socket>           Set serial port.\n");
+#endif
+#endif
+// #ifdef SERIAL_ENABLED
+//                 printf("  -serialtype <serial_type>            Set serial type.\n");
+// #endif
+
                 printf("\n");
-                printf("  -mk2                           Use SC-55mk2 ROM set.\n");
-                printf("  -st                            Use SC-55st ROM set.\n");
-                printf("  -mk1                           Use SC-55mk1 ROM set.\n");
-                printf("  -cm300                         Use CM-300/SCC-1 ROM set.\n");
-                printf("  -jv880                         Use JV-880 ROM set.\n");
-                printf("  -scb55                         Use SCB-55 ROM set.\n");
-                printf("  -rlp3237                       Use RLP-3237 ROM set.\n");
+                printf("  -mk2                                 Use SC-55mk2 ROM set.\n");
+                printf("  -st                                  Use SC-55st ROM set.\n");
+                printf("  -mk1                                 Use SC-55mk1 ROM set.\n");
+                printf("  -cm300                               Use CM-300/SCC-1 ROM set.\n");
+                printf("  -jv880                               Use JV-880 ROM set.\n");
+                printf("  -scb55                               Use SCB-55 ROM set.\n");
+                printf("  -rlp3237                             Use RLP-3237 ROM set.\n");
                 printf("\n");
-                printf("  -gs                            Reset system in GS mode.\n");
-                printf("  -gm                            Reset system in GM mode.\n");
+                printf("  -gs                                  Reset system in GS mode.\n");
+                printf("  -gm                                  Reset system in GM mode.\n");
                 return 0;
             }
             else if (!strcmp(argv[i], "-sc155"))
@@ -1622,6 +1641,12 @@ int main(int argc, char *argv[])
             {
                 outportname = argv[++i];
             }
+#ifdef SERIAL_ENABLED
+            else if (!strcmp(argv[i], "-serial") && i != argc - 1)
+            {
+                serial = argv[++i];
+            }
+#endif
         }
     }
 
@@ -1934,6 +1959,14 @@ int main(int argc, char *argv[])
         fprintf(stderr, "ERROR: Failed to initialize the MIDI Devices.\nWARNING: Continuing without MIDI Devices...\n");
         fflush(stderr);
     }
+
+#ifdef SERIAL_ENABLED
+    if (serial != NULL) {
+        if (SERIAL_Init(serial)) {
+            computer_switch = RS422;
+        }
+    }
+#endif
 
     LCD_Init();
     MCU_Init();
