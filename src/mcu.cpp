@@ -1007,7 +1007,7 @@ void MCU_UpdateUART_TX(void)
     MCU_Interrupt_SetRequest(INTERRUPT_SOURCE_UART_TX, (dev_register[DEV_SCR] & 0x80) != 0);
 
     if (uart_tx_ptr - uart_tx_buffer >= uart_buffer_size)   {
-        printf("MIDI TX OVERFLOW\n");
+        printf("MIDI TX OVERFLOW, THIS IS A BUG\n");
         return;
     }
 
@@ -1484,6 +1484,29 @@ int MCU_stricmp(const char* a, const char* b)
     return diff;
 }
 
+static COMPUTER_SWITCH MCU_ParseSerialType(const char * type, bool serial_loaded) {
+    if (!MCU_stricmp(type, "Mac") || !MCU_stricmp(type, "RS422") || !MCU_stricmp(type, "RS-422")) {
+        return RS422;
+    }
+    if (!MCU_stricmp(type, "PC-1") || !MCU_stricmp(type, "RS232_1") || !MCU_stricmp(type, "RS232-1") || !MCU_stricmp(type, "RS-232_1") || !MCU_stricmp(type, "RS-232-1") || !MCU_stricmp(type, "RS232C_1") || !MCU_stricmp(type, "RS232C-1") || !MCU_stricmp(type, "RS-232C_1") || !MCU_stricmp(type, "RS-232C-1")) {
+        return RS232C_1;
+    }
+    if (!MCU_stricmp(type, "PC-2") || !MCU_stricmp(type, "RS232") || !MCU_stricmp(type, "RS232_2") || !MCU_stricmp(type, "RS232-2") || !MCU_stricmp(type, "RS-232") || !MCU_stricmp(type, "RS-232_2") || !MCU_stricmp(type, "RS-232-2") || !MCU_stricmp(type, "RS232C") || !MCU_stricmp(type, "RS232C_2") || !MCU_stricmp(type, "RS232C-2") || !MCU_stricmp(type, "RS-232C") || !MCU_stricmp(type, "RS-232C_2") || !MCU_stricmp(type, "RS-232C-2")) {
+        return RS232C_2;
+    }
+    if (!MCU_stricmp(type, "MIDI")) {
+        return MIDI;
+    }
+    printf("Unknown switch type. Defaulting to ");
+    if (serial_loaded) {
+        printf("RS422\n");
+        return RS422;
+    } else {
+        printf("MIDI\n");
+        return MIDI;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     (void)argc;
@@ -1495,7 +1518,7 @@ int main(int argc, char *argv[])
     int pageNum = 32;
     bool autodetect = true;
     ResetType resetType = ResetType::NONE;
-    char *inportname = NULL, *outportname = NULL, *serial = NULL;
+    char *inportname = NULL, *outportname = NULL, *serial = NULL, *serialType = NULL;
 
     romset = ROM_SET_MK2;
 
@@ -1606,10 +1629,9 @@ int main(int argc, char *argv[])
                 printf("  -serial <file/unix_socket>           Set serial port.\n");
 #endif
 #endif
-// #ifdef SERIAL_ENABLED
-//                 printf("  -serialtype <serial_type>            Set serial type.\n");
-// #endif
-
+#ifdef SERIAL_ENABLED
+                printf("  -serialtype <serial_type>            Set serial type.\n");
+#endif
                 printf("\n");
                 printf("  -mk2                                 Use SC-55mk2 ROM set.\n");
                 printf("  -st                                  Use SC-55st ROM set.\n");
@@ -1645,6 +1667,10 @@ int main(int argc, char *argv[])
             else if (!strcmp(argv[i], "-serial") && i != argc - 1)
             {
                 serial = argv[++i];
+            }
+            else if (!strcmp(argv[i], "-serialtype") && i != argc - 1)
+            {
+                serialType = argv[++i];
             }
 #endif
         }
@@ -1966,6 +1992,9 @@ int main(int argc, char *argv[])
             computer_switch = RS422;
         }
     }
+    if (serialType != NULL) {
+        computer_switch = MCU_ParseSerialType(serialType, computer_switch == RS422);
+    }
 #endif
 
     LCD_Init();
@@ -1981,6 +2010,7 @@ int main(int argc, char *argv[])
 
     MCU_CloseAudio();
     MIDI_Quit();
+    SERIAL_Close();
     LCD_UnInit();
     SDL_Quit();
 

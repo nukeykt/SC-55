@@ -44,6 +44,7 @@ void SERIAL_Update(uint64_t cycles);
 int SERIAL_HasData();
 uint8_t SERIAL_ReadUART();
 void SERIAL_PostUART(uint8_t data);
+void SERIAL_Close();
 
 #ifdef __cplusplus
 }

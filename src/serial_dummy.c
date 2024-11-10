@@ -34,7 +34,7 @@
 #include "serial.h"
 
 int SERIAL_Init(const char* path) {
-    return 1;
+    return 0;
 }
 void SERIAL_Update(uint64_t cycles) {
 
@@ -46,5 +46,8 @@ uint8_t SERIAL_ReadUART() {
     return 0;
 }
 void SERIAL_PostUART(uint8_t data) {
+    
+}
+void SERIAL_Close() {
     
 }

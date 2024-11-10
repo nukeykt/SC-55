@@ -200,7 +200,7 @@ void SM_Write(uint16_t address, uint8_t data)
                 break;
             case SM_DEV_UART2_DATA: // MIDI Out
                 if (uart_tx_ptr - uart_tx_buffer >= uart_buffer_size)   {
-                    printf("MIDI TX OVERFLOW\n");
+                    printf("MIDI TX OVERFLOW, THIS IS A BUG\n");
                     break;
                 }
 
@@ -955,10 +955,10 @@ void SM_Opcode_NOP(uint8_t opcode) // EA
 {
 }
 
-void SM_Opcode_BPL(uint8_t opcode) // 10
+void SM_Opcode_BPL_BMI(uint8_t opcode) // 10 30
 {
     int8_t diff = SM_ReadAdvance();
-    if ((sm.sr & SM_STATUS_N) == 0)
+    if ((sm.sr & SM_STATUS_N) == ((opcode & 0x20) == 0x20))
         sm.pc += diff;
 }
 
@@ -1072,7 +1072,7 @@ void (*SM_Opcode_Table[256])(uint8_t opcode)
     SM_Opcode_ORA, // 0d
     SM_Opcode_NotImplemented, // 0e
     SM_Opcode_SEB_CLB, // 0f
-    SM_Opcode_BPL, // 10
+    SM_Opcode_BPL_BMI, // 10
     SM_Opcode_ORA, // 11
     SM_Opcode_CLT, // 12
     SM_Opcode_BBC_BBS, // 13
@@ -1104,7 +1104,7 @@ void (*SM_Opcode_Table[256])(uint8_t opcode)
     SM_Opcode_AND, // 2d
     SM_Opcode_NotImplemented, // 2e
     SM_Opcode_SEB_CLB, // 2f
-    SM_Opcode_NotImplemented, // 30
+    SM_Opcode_BPL_BMI, // 30
     SM_Opcode_AND, // 31
     SM_Opcode_NotImplemented, // 32
     SM_Opcode_BBC_BBS, // 33

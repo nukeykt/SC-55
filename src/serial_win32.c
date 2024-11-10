@@ -86,7 +86,7 @@ static bool serial_init = false;
 static bool is_serial_port = false;
 static bool is_named_pipe = false;
 
-static const * serial_path;
+static char * serial_path;
 static HANDLE handle;
 static OVERLAPPED olRead;
 static OVERLAPPED olWrite;
@@ -103,7 +103,11 @@ static bool write_pending = false;
 
 static void Cleanup() {
     CloseHandle(handle);
+    CloseHandle(olRead.hEvent);
+    CloseHandle(olWrite.hEvent);
     handle = INVALID_HANDLE_VALUE;
+    olRead.hEvent = INVALID_HANDLE_VALUE;
+    olWrite.hEvent = INVALID_HANDLE_VALUE;
 }
 
 static void ReportIOError(DWORD error) {
@@ -112,8 +116,7 @@ static void ReportIOError(DWORD error) {
 }
 
 int SERIAL_Init(const char* path) {
-    if (serial_init) return;
-    // printf("is_serial_port: %d is_named_pipe: %d \n", IsSerialPort(path), IsNamedPipe(path));
+    if (serial_init) return 0;
     if (!IsSerialPort(path) && !IsNamedPipe(path)) {
         fprintf(stderr, "Can't open '%s': Not a serial port or named pipe\n", path);
         fflush(stderr);
@@ -138,9 +141,9 @@ int SERIAL_Init(const char* path) {
         NULL
     );
     if (handle == INVALID_HANDLE_VALUE) {
-        fprintf(stderr, "Unable to open serial port: %s errcode: %d\n", path, GetLastError());
+        fprintf(stderr, "Unable to open serial port: %s errcode: %ld\n", path, GetLastError());
         fflush(stderr);
-        free(serial_path);
+        free((void *) serial_path);
         return false;
     }
 
@@ -155,6 +158,7 @@ int SERIAL_Init(const char* path) {
     return true;
 }
 void SERIAL_Update(uint64_t cycles) {
+    (void) cycles;
     if (!serial_init || handle == INVALID_HANDLE_VALUE) return;
     // printf("readptr: %04x readend: %04x\n", read_ptr - read_buffer, read_end - read_buffer);
     if (read_ptr == read_end && !read_pending) {
@@ -162,8 +166,8 @@ void SERIAL_Update(uint64_t cycles) {
             read_ptr = read_buffer;
             read_end = read_buffer;
         }
-        DWORD dwReads = read_limit - read_end;
-        bool success = ReadFile(handle, read_end, dwReads, &dwReads, &olRead);
+        DWORD dwReads;
+        bool success = ReadFile(handle, read_end, read_limit - read_end, &dwReads, &olRead);
         if (success) {
             read_end += dwReads;
             read_pending = false;
@@ -192,11 +196,19 @@ void SERIAL_Update(uint64_t cycles) {
         }
     }
     if (write_ptr != write_end && !write_pending) {
-        DWORD dwWrite = write_end - write_ptr;
-        if (dwWrite < 0) {
-            dwWrite += BUFFER_SIZE;
+        DWORD dwWrite;
+        int32_t len = write_end - write_ptr;
+        uint8_t *towrite = write_ptr;
+        if (len < 0) {
+            if (towrite == write_limit) {
+                len += BUFFER_SIZE;
+                towrite = write_buffer;
+                write_ptr = write_buffer;
+            } else {
+                len = write_limit - towrite;
+            }
         }
-        bool success = WriteFile(handle, write_ptr, dwWrite, &dwWrite, &olWrite);
+        bool success = WriteFile(handle, towrite, len, &dwWrite, &olWrite);
         if (success) {
             write_ptr += dwWrite;
             write_pending = false;
@@ -224,9 +236,6 @@ void SERIAL_Update(uint64_t cycles) {
             }
         }
     }
-    if (write_end == write_limit) {
-        write_end = write_buffer;
-    }
     if (write_ptr == write_limit) {
         write_ptr = write_buffer;
     }
@@ -241,11 +250,19 @@ uint8_t SERIAL_ReadUART() {
     return 0;
 }
 void SERIAL_PostUART(uint8_t data) {
-    if (!serial_init) return;
-    if (write_end == write_limit) {
+    if (!serial_init || handle == INVALID_HANDLE_VALUE) return;
+    if (write_end == write_ptr - 1) {
         fprintf(stderr, "SERIAL TX OVERFLOW, THIS IS A BUG\n");
         fflush(stderr);
         return;
     }
     *write_end++ = data;
+    if (write_end == write_limit) {
+        write_end = write_buffer;
+    }
+}
+void SERIAL_Close() {
+    if (!serial_init) return;
+    Cleanup();
+    free((void *) serial_path);
 }
