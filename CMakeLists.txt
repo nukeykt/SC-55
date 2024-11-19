@@ -210,8 +210,8 @@ endif()
 
 if(WIN32)
     list(APPEND SC55_SRC src/serial_win32.c)
-else()
-    list(APPEND SC55_SRC src/serial_dummy.c)
+elseif(UNIX)
+    list(APPEND SC55_SRC src/serial_posix.c)
 endif()
 
 add_executable(nuked-sc55 ${SC55_SRC} ${UTF8MAIN_SRCS})
