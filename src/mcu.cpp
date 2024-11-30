@@ -1623,11 +1623,9 @@ int main(int argc, char *argv[])
 #define SERIAL_ENABLED
                 printf("  -serial <serial_port/named_pipe>     Set serial port.\n");
 #endif
-#if 0
 #ifdef __unix__
 #define SERIAL_ENABLED
                 printf("  -serial <file/unix_socket>           Set serial port.\n");
-#endif
 #endif
 #ifdef SERIAL_ENABLED
                 printf("  -serialtype <serial_type>            Set serial type.\n");
