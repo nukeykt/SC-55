@@ -203,6 +203,13 @@ enum class Romset {
     SC155MK2,
 };
 
+enum class Computerswitch {
+    RS422,
+    RS232C_1,
+    RS232C_2,
+    MIDI
+};
+
 constexpr size_t ROMSET_COUNT = 9;
 
 typedef void(*mcu_sample_callback)(void* userdata, const AudioFrame<int32_t>& frame);
@@ -232,7 +239,6 @@ struct mcu_t {
 
     uint16_t ad_val[4]{};
     uint8_t ad_nibble = 0;
-    uint8_t sw_pos = 3;
     uint8_t io_sd = 0;
 
     submcu_t* sm = nullptr;
@@ -250,7 +256,12 @@ struct mcu_t {
     uint64_t uart_rx_delay = 0;
     uint64_t uart_tx_delay = 0;
 
+    uint8_t uart_serial_rx_byte = 0;
+    uint64_t uart_serial_rx_delay = 0;
+    uint64_t uart_serial_tx_delay = 0;
+
     Romset romset = Romset::MK2;
+    Computerswitch sw_pos = Computerswitch::MIDI;
 
     int is_mk1 = 0; // 0 - SC-55mkII, SC-55ST. 1 - SC-55, CM-300/SCC-1
     int is_cm300 = 0; // 0 - SC-55, 1 - CM-300/SCC-1
@@ -306,6 +317,8 @@ uint16_t MCU_Read16(mcu_t& mcu, uint32_t address);
 uint32_t MCU_Read32(mcu_t& mcu, uint32_t address);
 void MCU_Write(mcu_t& mcu, uint32_t address, uint8_t value);
 void MCU_Write16(mcu_t& mcu, uint32_t address, uint16_t value);
+
+void MCU_SetSerial(mcu_t& mcu, std::string serialtype);
 
 inline uint32_t MCU_GetAddress(uint8_t page, uint16_t address) {
     return ((uint32_t)page << 16) + address;

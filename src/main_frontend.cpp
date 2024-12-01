@@ -39,6 +39,7 @@
 #include "audio.h"
 #include "cast.h"
 #include "pcm.h"
+#include "serial.h"
 #include <SDL.h>
 #include <cinttypes>
 #include <optional>
@@ -108,6 +109,8 @@ struct FE_Parameters
     bool help = false;
     std::string midiin_device;
     std::string midiout_device;
+    std::string serial_type;
+    std::string serial_port;
     std::string audio_device;
     uint32_t page_size = 512;
     uint32_t page_num = 32;
@@ -551,7 +554,7 @@ bool FE_CreateInstance(FE_Application& container, const std::filesystem::path& b
 
     fe->format = params.output_format;
 
-    if (!fe->emu.Init(EMU_Options { .enable_lcd = !params.no_lcd }))
+    if (!fe->emu.Init(EMU_Options { .enable_lcd = !params.no_lcd, .serial_type = params.serial_type }))
     {
         fprintf(stderr, "ERROR: Failed to init emulator.\n");
         return false;
@@ -619,6 +622,7 @@ enum class FE_ParseError
     UnknownArgument,
     RomDirectoryNotFound,
     FormatInvalid,
+    SerialTypeInvalid,
 };
 
 const char* FE_ParseErrorStr(FE_ParseError err)
@@ -643,6 +647,8 @@ const char* FE_ParseErrorStr(FE_ParseError err)
             return "Rom directory doesn't exist";
         case FE_ParseError::FormatInvalid:
             return "Output format invalid";
+        case FE_ParseError::SerialTypeInvalid:
+            return "Serial Type Invalid";
     }
     return "Unknown error";
 }
@@ -675,6 +681,31 @@ FE_ParseError FE_ParseCommandLine(int argc, char* argv[], FE_Parameters& result)
             }
 
             result.midiout_device = reader.Arg();
+        }
+        else if (reader.Any("-st", "--serial_type"))
+        {
+            if(!reader.Next())
+            {
+                return FE_ParseError::UnexpectedEnd;
+            }
+
+            if(reader.Arg() == "rs422" || reader.Arg() == "rs232c_1" || reader.Arg() == "rs232c_2")
+            {
+                result.serial_type = reader.Arg();
+            }
+            else
+            {
+                return FE_ParseError::SerialTypeInvalid;
+            }
+        }
+        else if(reader.Any("-sp", "--serialport"))
+        {
+            if(!reader.Next())
+            {
+                return FE_ParseError::UnexpectedEnd;
+            }
+
+            result.serial_port = reader.Arg();
         }
         else if (reader.Any("-a", "--audio-device"))
         {
@@ -858,12 +889,18 @@ General options:
   -?, -h, --help                                Display this information.
 
 Audio options:
-  -pi, --portin      <device_name_or_number>    Set MIDI input port.
-  -po, --portout     <device_name_or_number>    Set MIDI output port.
   -a, --audio-device <device_name_or_number>    Set output audio device.
   -b, --buffer-size  <page_size>[:page_count]   Set Audio Buffer size.
   -f, --format       s16|s32|f32                Set output format.
   --disable-oversampling                        Halves output frequency.
+
+MIDI port options (default, unless set to serial):
+  -pi, --portin      <device_name_or_number>    Set MIDI input port.
+  -po, --portout     <device_name_or_number>    Set MIDI output port.
+
+Serial Port options:
+  -st, --serial_type rs422|rs232c_1|rs232c_2    Set serial connection type
+  -sp, --serialport  <serial_io_port>           Set the serial port/named pipe/unix socket for serial I/O.
 
 Emulator options:
   -r, --reset     gs|gm                         Reset system in GS or GM mode.
@@ -968,10 +1005,21 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (!MIDI_Init(frontend, params.midiin_device, params.midiout_device))
+    if(!params.serial_type.empty() && !params.serial_port.empty())
     {
-        fprintf(stderr, "ERROR: Failed to initialize the MIDI Ports.\nWARNING: Continuing without MIDI Ports...\n");
-        fflush(stderr);
+        if(!SERIAL_Init(frontend, params.serial_port))
+        {
+            fprintf(stderr, "ERROR: Failed to initialize the Serial Port.\nWARNING: Continuing without Serial Port...\n");
+            fflush(stderr);
+        }
+    }
+    else
+    {
+        if (!MIDI_Init(frontend, params.midiin_device, params.midiout_device))
+        {
+            fprintf(stderr, "ERROR: Failed to initialize the MIDI Ports.\nWARNING: Continuing without MIDI Ports...\n");
+            fflush(stderr);
+        }
     }
 
     for (size_t i = 0; i < frontend.instances_in_use; ++i)

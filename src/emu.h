@@ -46,6 +46,7 @@
 struct EMU_Options
 {
     bool enable_lcd;
+    std::string serial_type;
 };
 
 enum class EMU_SystemReset {

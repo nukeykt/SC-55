@@ -90,6 +90,7 @@ add_executable(nuked-sc55)
 target_sources(nuked-sc55
     PRIVATE
     src/midi.h
+    src/serial.h
     src/main_frontend.cpp # main() is here!
 )
 
@@ -97,6 +98,13 @@ if(USE_RTMIDI)
     target_sources(nuked-sc55 PRIVATE src/midi_rtmidi.cpp)
 elseif(WIN32)
     target_sources(nuked-sc55 PRIVATE src/midi_win32.cpp)
+endif()
+
+# Serial support
+if(UNIX)
+    target_sources(nuked-sc55 PRIVATE src/serial_posix.cpp)
+elseif(WIN32)
+    target_sources(nuked-sc55 PRIVATE src/serial_win32.cpp)
 endif()
 
 target_link_libraries(nuked-sc55 PRIVATE SDL2::SDL2 SDL2::SDL2main nuked-sc55-backend)

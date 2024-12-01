@@ -39,6 +39,7 @@
 #include "pcm.h"
 #include "lcd.h"
 #include "midi.h"
+#include "serial.h"
 
 void MCU_ErrorTrap(mcu_t& mcu)
 {
@@ -132,14 +133,14 @@ READ_RCU:
             case 2: // SW
                 switch (mcu.sw_pos)
                 {
-                case 0:
+                case Computerswitch::RS422:
                 default:
                     return ANALOG_LEVEL_SW_0;
-                case 1:
+                case Computerswitch::RS232C_1:
                     return ANALOG_LEVEL_SW_1;
-                case 2:
+                case Computerswitch::RS232C_2:
                     return ANALOG_LEVEL_SW_2;
-                case 3:
+                case Computerswitch::MIDI:
                     return ANALOG_LEVEL_SW_3;
                 }
             case 3: // RCU
@@ -750,6 +751,18 @@ void MCU_Write16(mcu_t& mcu, uint32_t address, uint16_t value)
     address &= ~1;
     MCU_Write(mcu, address, value >> 8);
     MCU_Write(mcu, address + 1, value & 0xff);
+}
+
+void MCU_SetSerial(mcu_t& mcu, std::string serialtype)
+{
+    if(serialtype == "rs422")
+        mcu.sw_pos = Computerswitch::RS422;
+    else if(serialtype == "rs232c_1")
+        mcu.sw_pos = Computerswitch::RS232C_1;
+    else if(serialtype == "rs232c_2")
+        mcu.sw_pos = Computerswitch::RS232C_2;
+    else
+        mcu.sw_pos = Computerswitch::MIDI;
 }
 
 void MCU_ReadInstruction(mcu_t& mcu)

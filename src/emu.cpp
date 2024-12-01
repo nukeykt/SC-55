@@ -61,6 +61,7 @@ bool Emulator::Init(const EMU_Options& options)
     PCM_Init(*m_pcm, *m_mcu);
     TIMER_Init(*m_timer, *m_mcu);
     LCD_Init(*m_lcd, *m_mcu);
+    MCU_SetSerial(*m_mcu, m_options.serial_type);
 
     return true;
 }

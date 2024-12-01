@@ -33,6 +33,7 @@
  */
 #include "submcu.h"
 #include "mcu.h"
+#include "serial.h"
 
 enum {
     SM_VECTOR_UART3_TX = 0,
@@ -51,11 +52,13 @@ enum {
     SM_DEV_P1_DATA = 0x00,
     SM_DEV_P1_DIR = 0x01,
     SM_DEV_RAM_DIR = 0x02,
+    SM_DEV_UART1_DATA = 0x04,
     SM_DEV_UART1_MODE_STATUS = 0x05,
     SM_DEV_UART1_CTRL = 0x06,
     SM_DEV_UART2_DATA = 0x08,
     SM_DEV_UART2_MODE_STATUS = 0x09,
     SM_DEV_UART2_CTRL = 0x0a,
+    SM_DEV_UART3_DATA = 0x0c,
     SM_DEV_UART3_MODE_STATUS = 0x0d,
     SM_DEV_UART3_CTRL = 0x0e,
     SM_DEV_IPCM0 = 0x10,
@@ -100,7 +103,12 @@ uint8_t SM_Read(submcu_t& sm, uint16_t address)
         address &= 0x1f;
         switch (address)
         {
-            case SM_DEV_UART2_DATA:
+            case SM_DEV_UART1_DATA: //Serial In
+            {
+                sm.uart_serial_rx_gotbyte = 0;
+                return sm.mcu->uart_serial_rx_byte;
+            }
+            case SM_DEV_UART2_DATA: //MIDI In
             {
                 sm.uart_rx_gotbyte = 0;
                 return sm.mcu->uart_rx_byte;
@@ -160,6 +168,9 @@ void SM_Write(submcu_t& sm, uint16_t address, uint8_t data)
         address &= 0x1f;
         switch (address)
         {
+            case SM_DEV_UART1_DATA: // Serial Out
+                SERIAL_PostUART(data);
+                break;
             case SM_DEV_UART2_DATA: // MIDI Out
                 if(sm.mcu->uart_tx_ptr - sm.mcu->uart_tx_buffer >= uart_buffer_size)
                 {
@@ -171,6 +182,8 @@ void SM_Write(submcu_t& sm, uint16_t address, uint8_t data)
                 if(sm.mcu->uart_tx_ptr == sm.mcu->uart_tx_buffer && (data & 0x00) == 0)
                     sm.mcu->uart_tx_ptr = sm.mcu->uart_tx_buffer +1;
                 *(sm.mcu->uart_tx_ptr)++ = data;
+                break;
+            case SM_DEV_UART3_DATA:
                 break;
             case SM_DEV_P1_DATA:
                 MCU_WriteP1(*sm.mcu, data);
@@ -1448,6 +1461,27 @@ void SM_UpdateUART(submcu_t& sm)
     mcu.uart_rx_delay = sm.cycles + 3000 * 4;
 }
 
+void SM_UpdateSerial(submcu_t& sm)
+{
+    if((sm.device_mode[SM_DEV_UART1_CTRL]&4) == 0)
+        return;
+    
+    if(!SERIAL_HasData()) //No byte
+        return;
+    
+    if(sm.uart_serial_rx_gotbyte)
+        return;
+
+    if(sm.cycles < sm.mcu->uart_serial_rx_delay)
+        return;
+
+    sm.mcu->uart_serial_rx_byte = SERIAL_ReadUART();
+    sm.uart_serial_rx_gotbyte = 1;
+    sm.device_mode[SM_DEV_INT_REQUEST] |= 0x80;
+
+    sm.mcu->uart_serial_rx_delay = sm.cycles + 3000 * 4;
+}
+
 void SM_Update(submcu_t& sm, uint64_t cycles)
 {
     while (sm.cycles < cycles * 5)
@@ -1464,6 +1498,8 @@ void SM_Update(submcu_t& sm, uint64_t cycles)
         sm.cycles += 12 * 4; // FIXME
         
         SM_UpdateTimer(sm);
+        SM_UpdateSerial(sm);
         SM_UpdateUART(sm);
+        SERIAL_Update();
     }
 }
