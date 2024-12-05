@@ -1427,13 +1427,13 @@ void SM_UpdateTimer(void)
             else
                 sm_timer_prescaler--;
         }
-        sm_timer_cycles += 16;
+        sm_timer_cycles += 200;
     }
 }
 
 void SM_UpdateUART(void)
 {
-    if ((sm_device_mode[SM_DEV_UART1_CTRL] & 4) == 0) // RX disabled
+    if ((sm_device_mode[SM_DEV_UART2_CTRL] & 4) == 0) // RX disabled
         return;
     if (uart_write_ptr == uart_read_ptr) // no byte
         return;
@@ -1489,7 +1489,9 @@ void SM_Update(uint64_t cycles)
         
         SM_UpdateTimer();
         SM_UpdateSerial();
+        MCU_Midi_Lock();
         SM_UpdateUART();
+        MCU_Midi_Unlock();
         SERIAL_Update(sm.cycles);
     }
 }

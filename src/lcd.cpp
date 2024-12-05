@@ -360,25 +360,68 @@ void LCD_UnInit(void)
 uint32_t lcd_col1 = 0x000000;
 uint32_t lcd_col2 = 0x0050c8;
 
-void LCD_FontRenderStandard(int32_t x, int32_t y, uint8_t ch, bool overlay = false)
+#define NONZERO(x, y) (x) == 0 ? (y) : (x)
+
+uint32_t LCD_Fade(uint32_t color1, uint32_t color2) {
+    if (color1 == color2) return color2;
+    if (color1 == lcd_background[0][0]) {
+        color1 = lcd_col2;
+    }
+    uint8_t sb = (color1 >> 16) & 0xFF;
+    uint8_t sg = (color1 >> 8) & 0xFF;
+    uint8_t sr =  color1 & 0xFF;
+    uint8_t db = (color2 >> 16) & 0xFF;
+    uint8_t dg = (color2 >> 8) & 0xFF;
+    uint8_t dr =  color2 & 0xFF;
+    uint8_t r = (uint8_t) ((((uint32_t) sr * 2) + dr) / 3);
+    uint8_t g = (uint8_t) ((((uint32_t) sg * 2) + dg) / 3);
+    uint8_t b = (uint8_t) ((((uint32_t) sb * 2) + db) / 3);
+    uint32_t color = ((b & 0xFF) << 16) | ((g & 0xFF) << 8) | (r & 0xFF);
+    if (color != lcd_col1 && color != lcd_col2) {
+        if (r == sr)
+            r += NONZERO((dr - sr) / 2, dr - sr);
+        if (g == sg)
+            g += NONZERO((dg - sg) / 2, dg - sg);
+        if (b == sb)
+            b += NONZERO((db - sb) / 2, db - sb);
+    }
+    color = ((b & 0xFF) << 16) | ((g & 0xFF) << 8) | (r & 0xFF);
+    return color;
+}
+
+#undef NONZERO
+
+void LCD_FontRenderStandard(int32_t x, int32_t y, uint8_t ch, uint8_t cursor = 0)
 {
     uint8_t* f;
     if (ch >= 16)
         f = &lcd_font[ch - 16][0];
     else
         f = &LCD_CG[(ch & 7) * 8];
-    for (int i = 0; i < 7; i++)
+    for (int i = 0; i < 8; i++)
     {
+        if (i == 7 && cursor == 0) break;
         for (int j = 0; j < 5; j++)
         {
             uint32_t col;
-            if (f[i] & (1<<(4-j)))
-            {
-                col = lcd_col1;
-            }
-            else
-            {
-                col = lcd_col2;
+            if (i == 7) {
+                if (cursor == 2)
+                {
+                    col = lcd_col1;
+                }
+                else
+                {
+                    col = lcd_col2;
+                }
+            } else {
+                if (f[i] & (1<<(4-j)))
+                {
+                    col = lcd_col1;
+                }
+                else
+                {
+                    col = lcd_col2;
+                }
             }
             int xx = x + i * 6;
             int yy = y + j * 6;
@@ -386,13 +429,7 @@ void LCD_FontRenderStandard(int32_t x, int32_t y, uint8_t ch, bool overlay = fal
             {
                 for (int jj = 0; jj < 5; jj++)
                 {
-                    if (overlay)
-                    {
-                        if (lcd_buffer[xx+ii][yy+jj] != col && col == lcd_col1)
-                            lcd_buffer[xx+ii][yy+jj] = col;
-                    }
-                    else
-                        lcd_buffer[xx+ii][yy+jj] = col;
+                    lcd_buffer[xx+ii][yy+jj] = LCD_Fade(lcd_buffer[xx+ii][yy+jj], col);
                 }
             }
         }
@@ -425,7 +462,7 @@ void LCD_FontRenderLevel(int32_t x, int32_t y, uint8_t ch, uint8_t width = 5)
             {
                 for (int jj = 0; jj < 24; jj++)
                 {
-                    lcd_buffer[xx+ii][yy+jj] = col;
+                    lcd_buffer[xx+ii][yy+jj] = LCD_Fade(lcd_buffer[xx+ii][yy+jj], col);
                 }
             }
         }
@@ -493,7 +530,7 @@ void LCD_FontRenderLR(uint8_t ch)
             for (int j = 0; j < 11; j++)
             {
                 if (LR[f][i][j])
-                    lcd_buffer[i+LR_xy[f][0]][j+LR_xy[f][1]] = col;
+                    lcd_buffer[i+LR_xy[f][0]][j+LR_xy[f][1]] = LCD_Fade(lcd_buffer[i+LR_xy[f][0]][j+LR_xy[f][1]], col);
             }
         }
     }
@@ -509,7 +546,22 @@ static uint32_t inline LCD_MixColor(uint32_t color, uint8_t contrast) {
     r = (r * contrast) >> 8;
 
     return (color & 0xFF000000) | ((b & 0xFF) << 16) | ((g & 0xFF) << 8) | (r & 0xFF);
-} 
+}
+
+static inline void LCD_VolumeChanged() {
+    if (volume > 1.0f) {
+        volume = 1.0f;
+    }
+    if (volume < 0.0f) {
+        volume = 0.0f;
+    }
+    if (volume != 0.0f) {
+        float vol = powf(10.0f, (-80.0f * (1.0f - volume)) / 20.0f); // or volume ^ 8 (0 < volume < 1)
+        MCU_SetVolume((uint16_t) (vol * UINT16_MAX));
+    } else {
+        MCU_SetVolume(0);
+    }
+}
 
 void LCD_Update(void)
 {
@@ -522,7 +574,7 @@ void LCD_Update(void)
 
         uint8_t contrast = lcd_contrast;
 
-        if (!lcd_enable && !mcu_jv880 && false)
+        if (false && !lcd_enable && !mcu_jv880)
         {
             memset(lcd_buffer, 0, sizeof(lcd_buffer));
             contrast = 1;
@@ -531,18 +583,22 @@ void LCD_Update(void)
         {
             if (mcu_jv880)
             {
-                for (size_t i = 0; i < lcd_height; i++) {
-                    for (size_t j = 0; j < lcd_width; j++) {
-                        lcd_buffer[i][j] = 0xFF03be51;
+                if (lcd_buffer[0][0] != 0xFF03be51) {
+                    for (size_t i = 0; i < lcd_height; i++) {
+                        for (size_t j = 0; j < lcd_width; j++) {
+                            lcd_buffer[i][j] = 0xFF03be51;
+                        }
                     }
                 }
             }
             else
             {
                 if (lcd_enable) {
-                    for (size_t i = 0; i < lcd_height; i++) {
-                        for (size_t j = 0; j < lcd_width; j++) {
-                            lcd_buffer[i][j] = lcd_background[i][j];
+                    if (lcd_buffer[0][0] != lcd_background[0][0]) {
+                        for (size_t i = 0; i < lcd_height; i++) {
+                            for (size_t j = 0; j < lcd_width; j++) {
+                                lcd_buffer[i][j] = lcd_background[i][j];
+                            }
                         }
                     }
                 } else {
@@ -560,30 +616,20 @@ void LCD_Update(void)
             con = (con * con) >> 8;
             lcd_col2 = LCD_MixColor(lcd_buffer[0][0], 0xFF - (con / 4 + 4));
             lcd_col1 = LCD_MixColor(lcd_col2, 0x11 * (16 - (((contrast + 1) >> 1) + 4)));
-            // lcd_col2 = ((lcd_buffer[0][0] & 0xE0E0E0) * (32 - (contrast >> 1))) >> 5;
-            // lcd_col1 = ((lcd_col2 & 0xF0F0F0) * (16 - (((contrast + 1) >> 1) + 4))) >> 4;
-            // int con = (contrast * contrast) >> 4;
-            // lcd_col2 = ((lcd_buffer[0][0] & 0xE0E0E0) * (32 - (con >> 2))) >> 5;
-            // lcd_col1 = ((lcd_col2 & 0xF0F0F0) * (16 - (((contrast + 1) >> 1) + 4))) >> 4;
             // printf("bg: %06x, on: %06x, off: %06x contrast: %d pow(contrast, 2): %d\n", lcd_buffer[0][0] & 0xFFFFFF, lcd_col1  & 0xFFFFFF, lcd_col2  & 0xFFFFFF, contrast, con);
 
             if (mcu_jv880)
             {
+                int curX = LCD_DD_RAM % 0x40;
+                int curY = LCD_DD_RAM / 0x40;
                 for (int i = 0; i < 2; i++)
                 {
                     for (int j = 0; j < 24; j++)
                     {
                         uint8_t ch = LCD_Data[i * 40 + j];
-                        LCD_FontRenderStandard(10 + i * 50, 4 + j * 34, ' ');
-                        LCD_FontRenderStandard(4 + i * 50, 4 + j * 34, ch);
+                        LCD_FontRenderStandard(4 + i * 50, 4 + j * 34, ch, (i == curY && j == curX && LCD_C) + 1);
                     }
                 }
-                
-                // cursor
-                int j = LCD_DD_RAM % 0x40;
-                int i = LCD_DD_RAM / 0x40;
-                if (i < 2 && j < 24 && LCD_C)
-                    LCD_FontRenderStandard(10 + i * 50, 4 + j * 34, '_', true);
             }
             else
             {
@@ -731,6 +777,10 @@ void LCD_Update(void)
                     if (drag_volume_knob || (sdl_event.button.x >= 153 && sdl_event.button.x <= 212 && sdl_event.button.y >= 42 && sdl_event.button.y <= 101)) {
                         drag_volume_knob = (sdl_event.type == SDL_MOUSEBUTTONDOWN) || (drag_volume_knob && sdl_event.type != SDL_MOUSEBUTTONUP);
                     }
+                    if (sdl_event.button.clicks == 2 && (sdl_event.button.x >= 153 && sdl_event.button.x <= 212 && sdl_event.button.y >= 42 && sdl_event.button.y <= 101)) {
+                        volume = 0.8;
+                        LCD_VolumeChanged();
+                    } 
                 }
                 int32_t x = sdl_event.button.x;
                 int32_t y = sdl_event.button.y;
@@ -752,26 +802,31 @@ void LCD_Update(void)
             }
             case SDL_MOUSEMOTION:
                 if (drag_volume_knob) {
-                    int32_t relval = abs(sdl_event.motion.xrel) > abs(sdl_event.motion.yrel) ? sdl_event.motion.xrel : (volume > 0.5f ? sdl_event.motion.yrel : -sdl_event.motion.yrel);
-                    if (relval > 50) { // Maximum ±10dB incremental
-                        relval = 50;
+                    float angle = (atan2(sdl_event.motion.y - 72, sdl_event.motion.x - 183) + 270.0f / 180.0f * M_PI);
+                    if (isnan(angle)) {
+                        angle = 270.0f / 180.0f * M_PI;
                     }
-                    if (relval < -50) {
-                        relval = -50;
+                    if (angle > 2.0 * M_PI) {
+                        angle = angle - 2.0 * M_PI;
                     }
-                    volume += relval / (volume > 0.8f ? 10000.0f : 400.0f); // Prevent someone make sound too loud (like me)
-                    if (volume > 1.0f) {
-                        volume = 1.0f;
+                    if (angle > 330.0f / 180.0f * M_PI)
+                        angle = 330.0f / 180.0f * M_PI;
+                    if (angle < 30.0f / 180.0f * M_PI)
+                        angle = 30.0f / 180.0f * M_PI;
+                    float delta = (angle - 30.0f / 180.0f * M_PI) / (300.0f / 180.0f * M_PI) - volume;
+                    if (abs(delta) > 0.5f) {
+                        delta = 0.0f;
                     }
-                    if (volume < 0.0f) {
-                        volume = 0.0f;
+                    if (volume > 0.8f || volume + delta > 0.8f) {
+                        if (delta > 0.005f) {
+                            delta = 0.005f;
+                        }
+                        if (delta < -0.005f) {
+                            delta = -0.005f;
+                        }
                     }
-                    if (volume != 0.0f) {
-                        float vol = powf(10.0f, (-80.0f * (1.0f - volume)) / 20.0f); // or volume ^ 8 (0 < volume < 1)
-                        MCU_SetVolume((uint16_t) (vol * UINT16_MAX));
-                    } else {
-                        MCU_SetVolume(0);
-                    }
+                    volume += delta;
+                    LCD_VolumeChanged();
                 }
                 break;
             case SDL_MOUSEWHEEL:
@@ -784,18 +839,7 @@ void LCD_Update(void)
                         relval = -10;
                     }
                     volume += relval / 400.0f;
-                    if (volume > 1.0f) {
-                        volume = 1.0f;
-                    }
-                    if (volume < 0.0f) {
-                        volume = 0.0f;
-                    }
-                    if (volume != 0.0f) {
-                        float vol = powf(10.0f, (-80.0f * (1.0f - volume)) / 20.0f); // or volume ^ 8 (0 < volume < 1)
-                        MCU_SetVolume((uint16_t) (vol * UINT16_MAX));
-                    } else {
-                        MCU_SetVolume(0);
-                    }
+                    LCD_VolumeChanged();
                 }
                 break;
 

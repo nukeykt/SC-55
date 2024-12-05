@@ -110,8 +110,26 @@ static void Cleanup() {
     olWrite.hEvent = INVALID_HANDLE_VALUE;
 }
 
+static LPCSTR GetErrorString(DWORD error) {
+    LPSTR buffer = NULL;
+    DWORD size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, 0, (LPSTR) &buffer, 0, NULL);
+    if (buffer != NULL) {
+        if (buffer[size - 1] == '\n') {
+            buffer[size - 1] = '\0';
+        }
+    }
+    return buffer;
+}
+
 static void ReportIOError(DWORD error) {
-    fprintf(stderr, "Serial I/O Error: %ld\n", error);
+    LPCSTR str = GetErrorString(error);
+    fprintf(stderr, "Serial I/O Error: ");
+    if (str != NULL) {
+        fprintf(stderr, "%s\n", str);
+        LocalFree((HLOCAL) str);
+    } else {
+        fprintf(stderr, "%ld\n", error);
+    }
     fflush(stderr);
 }
 
@@ -141,7 +159,15 @@ int SERIAL_Init(const char* path) {
         NULL
     );
     if (handle == INVALID_HANDLE_VALUE) {
-        fprintf(stderr, "Unable to open serial port: %s errcode: %ld\n", path, GetLastError());
+        DWORD error = GetLastError();
+        LPCSTR str = GetErrorString(error);
+        fprintf(stderr, "Unable to open serial port: '%s' Error: ", path);
+        if (str != NULL) {
+            fprintf(stderr, "%s\n", str);
+            LocalFree((HLOCAL) str);
+        } else {
+            fprintf(stderr, "%ld\n", error);
+        }
         fflush(stderr);
         free((void *) serial_path);
         return false;
@@ -167,7 +193,7 @@ void SERIAL_Update(uint64_t cycles) {
             read_end = read_buffer;
         }
         DWORD dwReads;
-        bool success = ReadFile(handle, read_end, read_limit - read_end, &dwReads, &olRead);
+        bool success = ReadFile(handle, read_end, (DWORD) (read_limit - read_end), &dwReads, &olRead);
         if (success) {
             read_end += dwReads;
             read_pending = false;
@@ -197,7 +223,7 @@ void SERIAL_Update(uint64_t cycles) {
     }
     if (write_ptr != write_end && !write_pending) {
         DWORD dwWrite;
-        int32_t len = write_end - write_ptr;
+        int32_t len = (int32_t) (write_end - write_ptr);
         uint8_t *towrite = write_ptr;
         if (len < 0) {
             if (towrite == write_limit) {
@@ -205,7 +231,7 @@ void SERIAL_Update(uint64_t cycles) {
                 towrite = write_buffer;
                 write_ptr = write_buffer;
             } else {
-                len = write_limit - towrite;
+                len = (int32_t) (write_limit - towrite);
             }
         }
         bool success = WriteFile(handle, towrite, len, &dwWrite, &olWrite);

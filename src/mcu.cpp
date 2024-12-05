@@ -46,6 +46,7 @@
 #include "utf8main.h"
 #include "utils/files.h"
 #include "serial.h"
+#include <time.h>
 
 #if __linux__
 #include <unistd.h>
@@ -64,7 +65,7 @@ const char* rs_name[ROM_SET_COUNT] = {
     "SC-155mk2"
 };
 
-static const int ROM_SET_N_FILES = 6;
+static const int ROM_SET_N_FILES = 7;
 
 const char* roms[ROM_SET_COUNT][ROM_SET_N_FILES] =
 {
@@ -74,12 +75,14 @@ const char* roms[ROM_SET_COUNT][ROM_SET_N_FILES] =
     "waverom2.bin",
     "rom_sm.bin",
     "",
+    "SC55mkII_memory.bin",
 
     "rom1.bin",
     "rom2_st.bin",
     "waverom1.bin",
     "waverom2.bin",
     "rom_sm.bin",
+    "",
     "",
 
     "sc55_rom1.bin",
@@ -88,12 +91,14 @@ const char* roms[ROM_SET_COUNT][ROM_SET_N_FILES] =
     "sc55_waverom2.bin",
     "sc55_waverom3.bin",
     "",
+    "SC55_memory.bin",
 
     "cm300_rom1.bin",
     "cm300_rom2.bin",
     "cm300_waverom1.bin",
     "cm300_waverom2.bin",
     "cm300_waverom3.bin",
+    "",
     "",
 
     "jv880_rom1.bin",
@@ -102,6 +107,7 @@ const char* roms[ROM_SET_COUNT][ROM_SET_N_FILES] =
     "jv880_waverom2.bin",
     "jv880_waverom_expansion.bin",
     "jv880_waverom_pcmcard.bin",
+    "jv880_memory.bin",
 
     "scb55_rom1.bin",
     "scb55_rom2.bin",
@@ -109,10 +115,12 @@ const char* roms[ROM_SET_COUNT][ROM_SET_N_FILES] =
     "scb55_waverom2.bin",
     "",
     "",
+    "",
 
     "rlp3237_rom1.bin",
     "rlp3237_rom2.bin",
     "rlp3237_waverom1.bin",
+    "",
     "",
     "",
     "",
@@ -123,6 +131,7 @@ const char* roms[ROM_SET_COUNT][ROM_SET_N_FILES] =
     "sc155_waverom2.bin",
     "sc155_waverom3.bin",
     "",
+    "SC155_memory.bin",
 
     "rom1.bin",
     "rom2.bin",
@@ -130,6 +139,7 @@ const char* roms[ROM_SET_COUNT][ROM_SET_N_FILES] =
     "waverom2.bin",
     "rom_sm.bin",
     "",
+    "SC155mkII_memory.bin",
 };
 
 int romset = ROM_SET_MK2;
@@ -1081,6 +1091,8 @@ static bool work_thread_run = false;
 
 static SDL_mutex *work_thread_lock;
 
+static SDL_mutex *midi_lock;
+
 void MCU_WorkThread_Lock(void)
 {
     SDL_LockMutex(work_thread_lock);
@@ -1091,9 +1103,20 @@ void MCU_WorkThread_Unlock(void)
     SDL_UnlockMutex(work_thread_lock);
 }
 
+void MCU_Midi_Lock(void)
+{
+    SDL_LockMutex(midi_lock);
+}
+
+void MCU_Midi_Unlock(void)
+{
+    SDL_UnlockMutex(midi_lock);
+}
+
 int SDLCALL work_thread(void* data)
 {
     work_thread_lock = SDL_CreateMutex();
+    midi_lock = SDL_CreateMutex();
 
     MCU_WorkThread_Lock();
     while (work_thread_run)
@@ -1133,8 +1156,10 @@ int SDLCALL work_thread(void* data)
             SM_Update(mcu.cycles);
         else
         {
+            MCU_Midi_Lock();
             MCU_UpdateUART_RX();
             MCU_UpdateUART_TX();
+            MCU_Midi_Unlock();
         }
 
         MCU_UpdateUART();
@@ -1156,6 +1181,7 @@ int SDLCALL work_thread(void* data)
     MCU_WorkThread_Unlock();
 
     SDL_DestroyMutex(work_thread_lock);
+    SDL_DestroyMutex(midi_lock);
 
     return 0;
 }
@@ -1817,7 +1843,7 @@ int main(int argc, char *argv[])
         }
         rpaths[i] = basePath + "/" + roms[romset][i];
         s_rf[i] = Files::utf8_fopen(rpaths[i].c_str(), "rb");
-        bool optional = mcu_jv880 && i >= 4;
+        bool optional = (mcu_jv880 && i >= 4) || i == 6;
         r_ok &= optional || (s_rf[i] != nullptr);
         if(!s_rf[i])
         {
@@ -1961,6 +1987,17 @@ int main(int argc, char *argv[])
         }
     }
 
+    srand((uint32_t) time(NULL));
+    // Randomize memory to break checksums
+    for (int i = 0; i < RAM_SIZE; i++)
+        ram[i] = rand() & 0xFF;
+
+    if (!s_rf[6] || fread(sram, 1, SRAM_SIZE, s_rf[6]) != SRAM_SIZE) {
+        printf("Unable to read SRAM, will initialized as randomized value.\n");
+        for (int i = 0; i < SRAM_SIZE; i++)
+            sram[i] = rand() & 0xFF;
+    }
+
     // Close all files as they no longer needed being open
     closeAllR();
 
@@ -2011,6 +2048,14 @@ int main(int argc, char *argv[])
     SERIAL_Close();
     LCD_UnInit();
     SDL_Quit();
+
+    if (!rpaths[6].empty()) {
+        FILE * fp = Files::utf8_fopen(rpaths[6].c_str(), "wb");
+        if (!fp ||fwrite(sram, 1, SRAM_SIZE, fp) != SRAM_SIZE) {
+            printf("Unable to save SRAM.");
+        }
+        fclose(fp);
+    }
 
     return 0;
 }

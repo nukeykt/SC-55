@@ -11,8 +11,10 @@ static void MidiOnReceive(double, std::vector<uint8_t> *message, void *)
     uint8_t *beg = message->data();
     uint8_t *end = message->data() + message->size();
 
+    MCU_Midi_Lock();
     while(beg < end)
         MCU_PostUART(*beg++);
+    MCU_Midi_Unlock();
 }
 
 static void MidiOnError(RtMidiError::Type, const std::string &errorText, void *)

@@ -58,6 +58,7 @@ void CALLBACK MIDI_Callback(
             break;
         case MIM_DATA:
         {
+            MCU_Midi_Lock();
             int b1 = dwParam1 & 0xff;
             switch (b1 & 0xf0)
             {
@@ -76,6 +77,7 @@ void CALLBACK MIDI_Callback(
                     MCU_PostUART((dwParam1 >> 8) & 0xff);
                     break;
             }
+            MCU_Midi_Unlock();
             break;
         }
         case MIM_LONGDATA:
@@ -85,10 +87,12 @@ void CALLBACK MIDI_Callback(
 
             if (wMsg == MIM_LONGDATA)
             {
+                MCU_Midi_Lock();
                 for (int i = 0; i < midi_buffer.dwBytesRecorded; i++)
                 {
                     MCU_PostUART(midi_in_buffer[i]);
                 }
+                MCU_Midi_Unlock();
             }
 
             midiInPrepareHeader(midi_in_handle, &midi_buffer, sizeof(MIDIHDR));
