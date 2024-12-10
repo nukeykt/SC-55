@@ -138,7 +138,8 @@ uint8_t SM_Read(uint16_t address)
             case SM_DEV_UART1_MODE_STATUS:
             {
                 uint8_t ret = uart_serial_rx_gotbyte << 1;
-                ret |= 5;
+                ret |= 1;
+                ret |= 4; // Serial output enabled
                 return ret;
             }
             case SM_DEV_UART2_DATA: // Midi In
@@ -149,7 +150,8 @@ uint8_t SM_Read(uint16_t address)
             case SM_DEV_UART2_MODE_STATUS:
             {
                 uint8_t ret = uart_rx_gotbyte << 1;
-                ret |= 5;
+                ret |= 1;
+                ret |= 4; // Midi output enabled
                 return ret;
             }
             case SM_DEV_UART3_MODE_STATUS:
@@ -1427,7 +1429,7 @@ void SM_UpdateTimer(void)
             else
                 sm_timer_prescaler--;
         }
-        sm_timer_cycles += 200;
+        sm_timer_cycles += 120;
     }
 }
 

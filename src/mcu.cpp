@@ -46,7 +46,6 @@
 #include "utf8main.h"
 #include "utils/files.h"
 #include "serial.h"
-#include <time.h>
 
 #if __linux__
 #include <unistd.h>
@@ -1987,15 +1986,13 @@ int main(int argc, char *argv[])
         }
     }
 
-    srand((uint32_t) time(NULL));
-    // Randomize memory to break checksums
     for (int i = 0; i < RAM_SIZE; i++)
-        ram[i] = rand() & 0xFF;
+        ram[i] = 0;
 
     if (!s_rf[6] || fread(sram, 1, SRAM_SIZE, s_rf[6]) != SRAM_SIZE) {
-        printf("Unable to read SRAM, will initialized as randomized value.\n");
+        printf("Unable to read SRAM, will initialized as blank memory.\n");
         for (int i = 0; i < SRAM_SIZE; i++)
-            sram[i] = rand() & 0xFF;
+            sram[i] = 0;
     }
 
     // Close all files as they no longer needed being open
